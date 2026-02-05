@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { 
   Hash, 
@@ -46,9 +47,18 @@ const generateLotteryDates = () => {
   const THAI_DAYS_LONG = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
   for (let month = 0; month < 12; month++) {
     [1, 16].forEach(day => {
-      const date = new Date(year, month, day);
+      let actualDay = day;
+      // แก้ไข: เลื่อนวันหวยออก 1 พ.ค. 2569 เป็น 2 พ.ค. 2569 (เนื่องจาก 1 พ.ค. เป็นวันแรงงาน)
+      if (month === 4 && day === 1) {
+        actualDay = 2;
+      }
+      const date = new Date(year, month, actualDay);
       const dayOfWeek = date.getDay();
-      dates.push({ label: `${day} ${THAI_MONTHS[month]} 2569 (${THAI_DAYS_LONG[dayOfWeek]})`, dayOfWeek: dayOfWeek, id: `${year}-${month + 1}-${day}` });
+      dates.push({ 
+        label: `${actualDay} ${THAI_MONTHS[month]} 2569 (${THAI_DAYS_LONG[dayOfWeek]})`, 
+        dayOfWeek: dayOfWeek, 
+        id: `${year}-${month + 1}-${actualDay}` 
+      });
     });
   }
   return dates;
@@ -359,8 +369,8 @@ const App: React.FC = () => {
             title="วินเลข 2 ตัวล่าง" 
             subtitle={isFiltering ? "กรองเฉพาะเลขกำลังวัน" : (win2Mode === 'straight' ? "เลขวิน 2 ตัวตรง" : "เลขวิน 2 ตัวกลับ")}
             data={win2Digits} 
-            onCopy={() => copyResults(win2Digits, 'bottom2')}
-            isCopied={copied === 'bottom2'}
+            onCopy={() => copyResults(win2Digits, 'top2')}
+            isCopied={copied === 'top2'}
             theme={activeTheme}
           />
 
