@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { 
   Hash, 
   Zap,
@@ -14,7 +14,9 @@ import {
   Scissors,
   Check,
   ArrowRightLeft,
-  LayoutGrid
+  LayoutGrid,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import NumberSelector from './components/NumberSelector';
 import ResultCard from './components/ResultCard';
@@ -40,38 +42,16 @@ const DAY_NUMBERS = [
   { label: 'เสาร์', numbers: [8, 3, 2, 0, 1, 9], dayIdx: 6 },
 ];
 
-const generateLotteryDates = () => {
-  const dates = [];
-  const year = 2026;
-  const THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-  const THAI_DAYS_LONG = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
-  for (let month = 0; month < 12; month++) {
-    [1, 16].forEach(day => {
-      let actualDay = day;
-      // แก้ไข: เลื่อนวันหวยออก 1 พ.ค. 2569 เป็น 2 พ.ค. 2569 (เนื่องจาก 1 พ.ค. เป็นวันแรงงาน)
-      if (month === 4 && day === 1) {
-        actualDay = 2;
-      }
-      const date = new Date(year, month, actualDay);
-      const dayOfWeek = date.getDay();
-      dates.push({ 
-        label: `${actualDay} ${THAI_MONTHS[month]} 2569 (${THAI_DAYS_LONG[dayOfWeek]})`, 
-        dayOfWeek: dayOfWeek, 
-        id: `${year}-${month + 1}-${actualDay}` 
-      });
-    });
-  }
-  return dates;
-};
-
-const LOTTERY_DATES = generateLotteryDates();
+const THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const THAI_DAYS_LONG = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
 
 type BetType = 'top2' | 'bottom2' | 'sets3' | 'back6' | 'crossing3';
 
 const App: React.FC = () => {
+  const [currentYearBE, setCurrentYearBE] = useState<number>(new Date().getFullYear() + 543);
+  const [selectedDraw, setSelectedDraw] = useState<string>("");
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
-  const [selectedDraw, setSelectedDraw] = useState<string>("");
   const [currentDayIdx, setCurrentDayIdx] = useState<number | null>(null);
   const [isFiltering, setIsFiltering] = useState<boolean>(false);
   const [betAmount, setBetAmount] = useState<string>("1");
@@ -81,6 +61,34 @@ const App: React.FC = () => {
 
   const activeTheme = currentDayIdx !== null ? DAY_THEMES[currentDayIdx] : DAY_THEMES.default;
 
+  const lotteryDates = useMemo(() => {
+    const dates = [];
+    const adYear = currentYearBE - 543;
+    for (let month = 0; month < 12; month++) {
+      [1, 16].forEach(day => {
+        let actualDay = day;
+        // กฎการเลื่อนวันหยุดหวย
+        if (month === 0 && day === 16) actualDay = 17; // 16 ม.ค. (วันครู) เลื่อนเป็น 17 ม.ค.
+        if (month === 4 && day === 1) actualDay = 2;   // 1 พ.ค. (วันแรงงาน) เลื่อนเป็น 2 พ.ค.
+
+        const date = new Date(adYear, month, actualDay);
+        const dayOfWeek = date.getDay();
+        
+        dates.push({ 
+          label: `${actualDay} ${THAI_MONTHS[month]} ${currentYearBE} (${THAI_DAYS_LONG[dayOfWeek]})`, 
+          dayOfWeek: dayOfWeek, 
+          id: `${adYear}-${month + 1}-${actualDay}` 
+        });
+      });
+    }
+    return dates;
+  }, [currentYearBE]);
+
+  useEffect(() => {
+    setSelectedDraw("");
+    setCurrentDayIdx(null);
+  }, [currentYearBE]);
+
   const toggleNumber = useCallback((num: number) => {
     setSelectedNumbers(prev => prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num].sort((a, b) => a - b));
   }, []);
@@ -88,7 +96,7 @@ const App: React.FC = () => {
   const handleDrawChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setSelectedDraw(val);
-    const draw = LOTTERY_DATES.find(d => d.id === val);
+    const draw = lotteryDates.find(d => d.id === val);
     if (draw) {
       setCurrentDayIdx(draw.dayOfWeek);
       const luckyData = DAY_NUMBERS.find(d => d.dayIdx === draw.dayOfWeek);
@@ -97,9 +105,9 @@ const App: React.FC = () => {
   };
 
   const activeDrawLabel = useMemo(() => {
-    const draw = LOTTERY_DATES.find(d => d.id === selectedDraw);
-    return draw ? `งวดประจำวันที่ ${draw.label}` : '';
-  }, [selectedDraw]);
+    const draw = lotteryDates.find(d => d.id === selectedDraw);
+    return draw ? `งวดวันที่ ${draw.label}` : '';
+  }, [selectedDraw, lotteryDates]);
 
   const isDayCombination = useCallback((digits: string) => {
     if (currentDayIdx === null) return true;
@@ -116,6 +124,7 @@ const App: React.FC = () => {
     return midSet.includes(d2) && (outerSet.includes(d1) || outerSet.includes(d3));
   }, []);
 
+  // วิน 2 ตัว: ไม่เอาเลขเบิ้ล (หาม 2 ตัว) ตามปกติของการวินเลข
   const win2Digits = useMemo(() => {
     if (selectedNumbers.length < 2) return [];
     let results: string[] = [];
@@ -136,6 +145,7 @@ const App: React.FC = () => {
     return isFiltering ? results.filter(isDayCombination) : results;
   }, [selectedNumbers, isFiltering, isDayCombination, win2Mode]);
 
+  // วิน 3 ตัวชุด: ใช้ i < j < k เพื่อให้ได้เลขที่ไม่ซ้ำกันเด็ดขาด (ไม่หาม/ไม่ตอง)
   const win3Sets = useMemo(() => {
     if (selectedNumbers.length < 3) return [];
     let results: string[] = [];
@@ -149,6 +159,7 @@ const App: React.FC = () => {
     return isFiltering ? results.filter(isDayCombination) : results;
   }, [selectedNumbers, isFiltering, isDayCombination]);
 
+  // วิน 3 ตัว 6 กลับ: ใช้เลข 3 ตัวที่ไม่ซ้ำกันมาสลับตำแหน่ง (ไม่หาม/ไม่ตอง)
   const win3Permutations = useMemo(() => {
     if (selectedNumbers.length < 3) return [];
     let results: string[] = [];
@@ -216,25 +227,46 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 mt-8 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           <section className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col gap-4">
-              <label className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                <Calendar className={`w-5 h-5 ${activeTheme.text}`} /> เลือกงวดปี 2569
-              </label>
-              <select value={selectedDraw} onChange={handleDrawChange} className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-3 px-4 rounded-xl appearance-none font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option value="" disabled>--- กรุณาเลือกงวด ---</option>
-                {LOTTERY_DATES.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
-              </select>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+           <section className="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-5">
+              <div className="space-y-3">
+                <label className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                  <Calendar className={`w-5 h-5 ${activeTheme.text}`} /> กำหนดปี พ.ศ. เอง
+                </label>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setCurrentYearBE(prev => prev - 1)} className="p-3 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors">
+                    <ChevronLeft className="w-5 h-5 text-slate-600" />
+                  </button>
+                  <input 
+                    type="number" 
+                    value={currentYearBE}
+                    onChange={(e) => setCurrentYearBE(parseInt(e.target.value) || new Date().getFullYear() + 543)}
+                    className="flex-1 text-center font-bold text-2xl py-2 bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-xl outline-none transition-all"
+                  />
+                  <button onClick={() => setCurrentYearBE(prev => prev + 1)} className="p-3 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors">
+                    <ChevronRight className="w-5 h-5 text-slate-600" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-slate-500 uppercase tracking-wider">เลือกงวดในรอบปี {currentYearBE}</label>
+                <select value={selectedDraw} onChange={handleDrawChange} className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-4 px-4 rounded-xl appearance-none font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                  <option value="" disabled>--- กรุณาเลือกงวด ---</option>
+                  {lotteryDates.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+              </div>
            </section>
 
-           <section className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+           <section className="lg:col-span-7 bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-4">
-               <Zap className={`w-5 h-5 ${activeTheme.text}`} /> เลขกำลังวัน
+               <Zap className={`w-5 h-5 ${activeTheme.text}`} /> ทางลัดเลขกำลังวัน
              </h2>
-             <div className="flex flex-wrap gap-2">
+             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                {DAY_NUMBERS.map(day => (
-                 <button key={day.label} onClick={() => { setCurrentDayIdx(day.dayIdx); setSelectedNumbers([...day.numbers].sort((a,b)=>a-b)); }} className={`${DAY_THEMES[day.dayIdx].bg} ${day.dayIdx === 1 ? 'text-slate-800' : 'text-white'} px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all`}>
-                   {day.label}
+                 <button key={day.label} onClick={() => { setCurrentDayIdx(day.dayIdx); setSelectedNumbers([...day.numbers].sort((a,b)=>a-b)); }} className={`${DAY_THEMES[day.dayIdx].bg} ${day.dayIdx === 1 ? 'text-slate-800' : 'text-white'} px-4 py-3 rounded-xl text-sm font-bold shadow-sm hover:brightness-95 active:scale-95 transition-all flex flex-col items-center gap-1`}>
+                   <span className="opacity-80 text-[10px] uppercase tracking-tighter">วัน{day.label}</span>
+                   <span>{day.numbers.join('-')}</span>
                  </button>
                ))}
              </div>
@@ -244,32 +276,26 @@ const App: React.FC = () => {
         <section className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
           <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
             <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-              <Hash className={`w-5 h-5 ${activeTheme.text}`} /> ชุดตัวเลข ({selectedNumbers.length})
+              <Hash className={`w-5 h-5 ${activeTheme.text}`} /> ชุดตัวเลขวิน ({selectedNumbers.length})
             </h2>
             <div className="flex gap-2">
-              <button onClick={() => setSelectedNumbers([0,1,2,3,4,5,6,7,8,9])} className={`text-xs font-bold ${activeTheme.text} px-3 py-1.5 rounded-lg hover:bg-slate-50`}>เลือกทั้งหมด</button>
-              <button onClick={() => { setSelectedNumbers([]); setCurrentDayIdx(null); setSelectedDraw(""); }} className="text-xs font-bold text-rose-500 px-3 py-1.5 rounded-lg hover:bg-rose-50">ล้างออก</button>
+              <button onClick={() => setSelectedNumbers([0,1,2,3,4,5,6,7,8,9])} className={`text-xs font-bold ${activeTheme.text} px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors`}>เลือก 0-9</button>
+              <button onClick={() => { setSelectedNumbers([]); setCurrentDayIdx(null); setSelectedDraw(""); }} className="text-xs font-bold text-rose-500 px-3 py-2 rounded-lg hover:bg-rose-50 transition-colors">ล้างทั้งหมด</button>
             </div>
           </div>
           <NumberSelector selectedNumbers={selectedNumbers} onToggle={toggleNumber} themeColor={activeTheme.bg} />
         </section>
 
         <section className={`bg-white rounded-2xl p-6 shadow-md border transition-all duration-500 ${activeTheme.border}`}>
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-3 text-2xl font-black text-slate-800">
-                <Calculator className={`w-8 h-8 ${activeTheme.text}`} />
-                เครื่องคิดเลขคำนวณเงิน
+                <Calculator className={`w-8 h-8 ${activeTheme.text}`} /> คำนวณเงิน
               </div>
-              <div className="relative w-full md:w-72">
+              <div className="relative w-full md:w-80">
                 <Coins className={`absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 ${activeTheme.text}`} />
-                <input 
-                  type="number" 
-                  value={betAmount} 
-                  onChange={(e) => setBetAmount(e.target.value)} 
-                  className={`w-full pl-12 pr-4 py-4 bg-slate-50 border-2 rounded-2xl font-black text-2xl text-slate-700 focus:outline-none transition-all ${activeTheme.border}`} 
-                  placeholder="บาทต่อชุด" 
-                />
+                <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} className={`w-full pl-12 pr-4 py-5 bg-slate-50 border-2 rounded-2xl font-black text-3xl text-slate-700 focus:outline-none transition-all ${activeTheme.border} text-right`} placeholder="0" />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">บาท</span>
               </div>
             </div>
 
@@ -277,46 +303,31 @@ const App: React.FC = () => {
               {[
                 { id: 'top2' as BetType, label: '2 ตัวบน', count: win2Digits.length },
                 { id: 'bottom2' as BetType, label: '2 ตัวล่าง', count: win2Digits.length },
-                { id: 'sets3' as BetType, label: '3 ตัวชุด', count: win3Sets.length },
+                { id: 'sets3' as BetType, label: '3 ตัวชุด (ไม่หาม)', count: win3Sets.length },
                 { id: 'back6' as BetType, label: '3 ตัว (6 กลับ)', count: win3Permutations.length },
                 { id: 'crossing3' as BetType, label: '3 ตัวข้ามเศียร', count: win3CrossingCut.length },
               ].map((bet) => (
-                <button 
-                  key={bet.id}
-                  onClick={() => toggleBetSelection(bet.id)}
-                  className={`group relative flex flex-col rounded-3xl border-2 transition-all text-left overflow-hidden ${selectedBets.includes(bet.id) ? `border-transparent shadow-xl scale-[1.03] ${activeTheme.bg}` : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'}`}
-                >
-                  <div className={`px-4 py-2 text-sm font-black uppercase tracking-widest flex justify-between items-center ${selectedBets.includes(bet.id) ? 'bg-black/10 text-white' : 'bg-slate-50 text-slate-400'}`}>
+                <button key={bet.id} onClick={() => toggleBetSelection(bet.id)} className={`group relative flex flex-col rounded-3xl border-2 transition-all text-left overflow-hidden ${selectedBets.includes(bet.id) ? `border-transparent shadow-xl scale-[1.03] ${activeTheme.bg}` : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'}`}>
+                  <div className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest flex justify-between items-center ${selectedBets.includes(bet.id) ? 'bg-black/10 text-white' : 'bg-slate-50 text-slate-400'}`}>
                     {bet.label}
-                    {selectedBets.includes(bet.id) && <Check className="w-5 h-5 text-white" />}
+                    {selectedBets.includes(bet.id) && <Check className="w-4 h-4 text-white" />}
                   </div>
-                  <div className="p-5">
+                  <div className="p-6">
                     <div className="flex items-baseline gap-2">
-                      <span className={`text-3xl font-black ${selectedBets.includes(bet.id) ? 'text-white' : 'text-slate-800'}`}>
-                        {(bet.count * (parseFloat(betAmount) || 0)).toLocaleString()}
-                      </span>
+                      <span className={`text-3xl font-black ${selectedBets.includes(bet.id) ? 'text-white' : 'text-slate-800'}`}>{(bet.count * (parseFloat(betAmount) || 0)).toLocaleString()}</span>
                       <span className={`text-base font-bold ${selectedBets.includes(bet.id) ? 'text-white/80' : 'text-slate-400'}`}>บาท</span>
                     </div>
-                    <div className={`mt-2 text-sm font-bold ${selectedBets.includes(bet.id) ? 'text-white/70' : 'text-slate-400'}`}>
-                      {bet.count} ชุด
-                    </div>
+                    <div className={`mt-2 text-sm font-bold ${selectedBets.includes(bet.id) ? 'text-white/70' : 'text-slate-400'}`}>{bet.count} ชุด</div>
                   </div>
                 </button>
               ))}
 
               <div className={`relative flex flex-col rounded-3xl border-4 transition-all duration-500 overflow-hidden ${activeTheme.border} bg-slate-900 shadow-2xl scale-[1.05] z-10`}>
-                <div className={`${activeTheme.bg} px-4 py-3 text-sm font-black uppercase text-white tracking-widest text-center`}>
-                  ยอดเงินรวมสุทธิ
-                </div>
-                <div className="p-6 flex flex-col items-center justify-center bg-slate-900">
+                <div className={`${activeTheme.bg} px-4 py-3 text-xs font-black uppercase text-white tracking-widest text-center`}>ยอดรวมสุทธิ</div>
+                <div className="p-8 flex flex-col items-center justify-center bg-slate-900">
                   <div className="flex items-baseline gap-3">
-                    <span className={`text-4xl font-black text-white leading-none`}>
-                      {totalCost.toLocaleString()}
-                    </span>
+                    <span className={`text-5xl font-black text-white tabular-nums`}>{totalCost.toLocaleString()}</span>
                     <span className={`text-xl font-black text-white opacity-60`}>บาท</span>
-                  </div>
-                  <div className="mt-2 text-xs font-bold text-white/40 tracking-widest">
-                    TOTAL PAYOUT CALCULATED
                   </div>
                 </div>
               </div>
@@ -324,85 +335,40 @@ const App: React.FC = () => {
           </div>
         </section>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 pt-4 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 pt-8 gap-4">
            <div className="flex items-center gap-2">
-             <Filter className={`w-5 h-5 ${activeTheme.text}`} />
-             <span className="font-bold text-slate-700">ผลลัพธ์การวินเลข</span>
+             <Filter className={`w-6 h-6 ${activeTheme.text}`} />
+             <span className="text-xl font-bold text-slate-700">รายการวินเลข (ไม่รวมหาม)</span>
            </div>
            
            <div className="flex flex-wrap gap-2">
               <div className="flex bg-white p-1 rounded-full shadow-sm border border-slate-100">
-                <button 
-                  onClick={() => setWin2Mode('straight')} 
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${win2Mode === 'straight' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" /> ชุดตรง
-                </button>
-                <button 
-                  onClick={() => setWin2Mode('reverse')} 
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${win2Mode === 'reverse' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  <ArrowRightLeft className="w-3.5 h-3.5" /> กลับเลข
-                </button>
+                <button onClick={() => setWin2Mode('straight')} className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold transition-all ${win2Mode === 'straight' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>ชุดตรง</button>
+                <button onClick={() => setWin2Mode('reverse')} className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold transition-all ${win2Mode === 'reverse' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>กลับเลข</button>
               </div>
-
               {currentDayIdx !== null && (
-                <button onClick={() => setIsFiltering(!isFiltering)} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all duration-300 ${isFiltering ? activeTheme.bg + ' text-white shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
+                <button onClick={() => setIsFiltering(!isFiltering)} className={`flex items-center gap-2 px-5 py-2 rounded-full border transition-all duration-300 ${isFiltering ? activeTheme.bg + ' text-white shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
                   {isFiltering ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                  <span className="text-xs font-bold">กรองเลขกำลังวัน</span>
+                  <span className="text-xs font-bold">กรองกำลังวัน</span>
                 </button>
               )}
            </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <ResultCard 
-            title="วินเลข 2 ตัวบน" 
-            subtitle={isFiltering ? "กรองเฉพาะเลขกำลังวัน" : (win2Mode === 'straight' ? "เลขวิน 2 ตัวตรง" : "เลขวิน 2 ตัวกลับ")}
-            data={win2Digits} 
-            onCopy={() => copyResults(win2Digits, 'top2')}
-            isCopied={copied === 'top2'}
-            theme={activeTheme}
-          />
-
-          <ResultCard 
-            title="วินเลข 2 ตัวล่าง" 
-            subtitle={isFiltering ? "กรองเฉพาะเลขกำลังวัน" : (win2Mode === 'straight' ? "เลขวิน 2 ตัวตรง" : "เลขวิน 2 ตัวกลับ")}
-            data={win2Digits} 
-            onCopy={() => copyResults(win2Digits, 'top2')}
-            isCopied={copied === 'top2'}
-            theme={activeTheme}
-          />
-
+          <ResultCard title="วินเลข 2 ตัวบน" subtitle={isFiltering ? "กรองตามกำลังวัน" : "เลขวินตรง/กลับ"} data={win2Digits} onCopy={() => copyResults(win2Digits, 'top2')} isCopied={copied === 'top2'} theme={activeTheme} />
+          <ResultCard title="วินเลข 2 ตัวล่าง" subtitle={isFiltering ? "กรองตามกำลังวัน" : "เลขวินตรง/กลับ"} data={win2Digits} onCopy={() => copyResults(win2Digits, 'bottom2')} isCopied={copied === 'bottom2'} theme={activeTheme} />
           <div className="space-y-4">
-             <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-100 overflow-x-auto no-scrollbar">
-                <button onClick={() => setWin3Mode('sets')} className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all ${win3Mode === 'sets' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                  <Layers className="w-3.5 h-3.5" /> ชุด
-                </button>
-                <button onClick={() => setWin3Mode('6back')} className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all ${win3Mode === '6back' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                  <Repeat className="w-3.5 h-3.5" /> 6 กลับ
-                </button>
-                <button onClick={() => setWin3Mode('crossing')} className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all ${win3Mode === 'crossing' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                  <Scissors className="w-3.5 h-3.5" /> ตัดข้ามเศียร
-                </button>
+             <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
+                <button onClick={() => setWin3Mode('sets')} className={`flex-1 min-w-[90px] flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[10px] font-bold transition-all ${win3Mode === 'sets' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>3 ตัวชุด</button>
+                <button onClick={() => setWin3Mode('6back')} className={`flex-1 min-w-[90px] flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[10px] font-bold transition-all ${win3Mode === '6back' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>6 กลับ</button>
+                <button onClick={() => setWin3Mode('crossing')} className={`flex-1 min-w-[90px] flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[10px] font-bold transition-all ${win3Mode === 'crossing' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>ตัดข้ามเศียร</button>
              </div>
-
-             <ResultCard 
-                title={win3Mode === 'sets' ? "วินเลข 3 ตัว (ชุด)" : win3Mode === 'crossing' ? "วินเลข 3 ตัว (ตัดข้ามเศียร)" : "วินเลข 3 ตัว (6 กลับ)"}
-                subtitle={isFiltering ? "กรองเฉพาะเลขกำลังวัน" : (win3Mode === 'sets' ? "เลขวิน 3 ตัว (ไม่รวมหาม/ตอง)" : win3Mode === 'crossing' ? "ตัดเลข 2,5,8 ที่อยู่ตรงกลาง" : "เลข 6 กลับ ครบทุกตำแหน่ง")}
-                data={win3DisplayData} 
-                onCopy={() => copyResults(win3DisplayData, '3digit')}
-                isCopied={copied === '3digit'}
-                theme={activeTheme}
-                isFullHeight={true}
-             />
+             <ResultCard title={win3Mode === 'sets' ? "วินเลข 3 ตัวตรง" : win3Mode === 'crossing' ? "วินเลข 3 ตัว (ตัดข้ามเศียร)" : "วินเลข 3 ตัว (6 กลับ)"} subtitle="ระบบตัดเลขหามและเลขตองให้อัตโนมัติ" data={win3DisplayData} onCopy={() => copyResults(win3DisplayData, '3digit')} isCopied={copied === '3digit'} theme={activeTheme} isFullHeight={true} />
           </div>
         </div>
       </main>
-
-      <footer className="max-w-6xl mx-auto px-4 mt-12 mb-8 text-center text-slate-400 text-xs">
-        <p>© 2569 วินเลขนำโชค - ระบบคำนวณเงินและตัดเลขข้ามเศียร อัตโนมัติ</p>
-      </footer>
+      <footer className="max-w-6xl mx-auto px-4 mt-16 mb-8 text-center text-slate-400 text-xs uppercase tracking-widest">© วินเลขนำโชค - ปรับปรุงเพื่อความแม่นยำ</footer>
     </div>
   );
 };
