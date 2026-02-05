@@ -9,17 +9,23 @@ import {
   EyeOff,
   Coins,
   Calculator,
-  Layers,
-  Repeat,
-  Scissors,
   Check,
-  ArrowRightLeft,
-  LayoutGrid,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Copy,
+  CheckCircle2,
+  BarChart3,
+  Loader2,
+  TrendingUp,
+  Award,
+  Trash2
 } from 'lucide-react';
+import { GoogleGenAI, Type } from "@google/genai";
 import NumberSelector from './components/NumberSelector';
 import ResultCard from './components/ResultCard';
+
+// Initialize AI
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const DAY_THEMES: Record<number | string, { bg: string; text: string; hex: string; border: string; btn: string; tag: string; switch: string }> = {
   0: { bg: 'bg-red-600', text: 'text-red-600', hex: '#dc2626', border: 'border-red-100', btn: 'bg-red-600 hover:bg-red-700', tag: 'bg-red-100 text-red-700', switch: 'bg-red-500' },
@@ -47,6 +53,11 @@ const THAI_DAYS_LONG = ['วันอาทิตย์', 'วันจันท
 
 type BetType = 'top2' | 'bottom2' | 'sets3' | 'back6' | 'crossing3';
 
+interface StatResult {
+  digit: number;
+  frequency: number;
+}
+
 const App: React.FC = () => {
   const [currentYearBE, setCurrentYearBE] = useState<number>(new Date().getFullYear() + 543);
   const [selectedDraw, setSelectedDraw] = useState<string>("");
@@ -56,8 +67,13 @@ const App: React.FC = () => {
   const [isFiltering, setIsFiltering] = useState<boolean>(false);
   const [betAmount, setBetAmount] = useState<string>("1");
   const [win3Mode, setWin3Mode] = useState<'sets' | '6back' | 'crossing'>('6back');
-  const [win2Mode, setWin2Mode] = useState<'straight' | 'reverse'>('reverse');
+  const [win2Mode, setWin2Mode] = useState<'reverse' | 'straight'>('reverse');
   const [selectedBets, setSelectedBets] = useState<BetType[]>(['top2', 'bottom2', 'back6']);
+  
+  // Statistics State
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
+  const [statsData, setStatsData] = useState<{ top2: StatResult[], bottom2: StatResult[], top3: StatResult[] } | null>(null);
+  const [showStats, setShowStats] = useState(false);
 
   const activeTheme = currentDayIdx !== null ? DAY_THEMES[currentDayIdx] : DAY_THEMES.default;
 
@@ -67,13 +83,10 @@ const App: React.FC = () => {
     for (let month = 0; month < 12; month++) {
       [1, 16].forEach(day => {
         let actualDay = day;
-        // กฎการเลื่อนวันหยุดหวย
-        if (month === 0 && day === 16) actualDay = 17; // 16 ม.ค. (วันครู) เลื่อนเป็น 17 ม.ค.
-        if (month === 4 && day === 1) actualDay = 2;   // 1 พ.ค. (วันแรงงาน) เลื่อนเป็น 2 พ.ค.
-
+        if (month === 0 && day === 16) actualDay = 17;
+        if (month === 4 && day === 1) actualDay = 2;
         const date = new Date(adYear, month, actualDay);
         const dayOfWeek = date.getDay();
-        
         dates.push({ 
           label: `${actualDay} ${THAI_MONTHS[month]} ${currentYearBE} (${THAI_DAYS_LONG[dayOfWeek]})`, 
           dayOfWeek: dayOfWeek, 
@@ -104,27 +117,80 @@ const App: React.FC = () => {
     }
   };
 
-  const activeDrawLabel = useMemo(() => {
-    const draw = lotteryDates.find(d => d.id === selectedDraw);
-    return draw ? `งวดวันที่ ${draw.label}` : '';
-  }, [selectedDraw, lotteryDates]);
+  const fetchStatistics = async () => {
+    if (!selectedDraw) return;
+    setIsStatsLoading(true);
+    setShowStats(true);
+    try {
+      const draw = lotteryDates.find(d => d.id === selectedDraw);
+      const drawInfo = draw ? draw.label : "งวดทั่วไป";
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `จงทำหน้าที่เป็นผู้เชี่ยวชาญด้านสถิติตัวเลขสลากกินแบ่งรัฐบาลไทย วิเคราะห์สถิติตัวเลข 0-9 ที่ออกบ่อยที่สุดในรอบ 20 ปี ย้อนหลังสำหรับงวดวันที่ ${drawInfo} (หรือลักษณะงวดกลางเดือน/ต้นเดือนที่ใกล้เคียง) 
+        ระบุค่าความถี่ (Frequency) ของตัวเลข 0-9 ใน 3 หมวด: 2 ตัวบน, 2 ตัวล่าง, และ 3 ตัวบน 
+        ส่งผลลัพธ์กลับมาเป็น JSON ตามโครงสร้าง: { top2: [{digit, frequency}], bottom2: [{digit, frequency}], top3: [{digit, frequency}] }`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              top2: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { digit: { type: Type.INTEGER }, frequency: { type: Type.INTEGER } } } },
+              bottom2: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { digit: { type: Type.INTEGER }, frequency: { type: Type.INTEGER } } } },
+              top3: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { digit: { type: Type.INTEGER }, frequency: { type: Type.INTEGER } } } }
+            }
+          }
+        }
+      });
+      
+      const data = JSON.parse(response.text);
+      setStatsData(data);
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  };
 
-  const isDayCombination = useCallback((digits: string) => {
-    if (currentDayIdx === null) return true;
-    const dayNums = DAY_NUMBERS.find(d => d.dayIdx === currentDayIdx)?.numbers || [];
-    return digits.split('').every(d => dayNums.includes(parseInt(d)));
-  }, [currentDayIdx]);
+  const applyTop7FromStats = () => {
+    if (!statsData) return;
+    // รวมคะแนนความถี่จากทั้ง 3 หมวดเพื่อหา 7 เลขที่แข็งแกร่งที่สุดโดยรวม
+    const masterFreq: Record<number, number> = {};
+    [...statsData.top2, ...statsData.bottom2, ...statsData.top3].forEach(item => {
+      masterFreq[item.digit] = (masterFreq[item.digit] || 0) + item.frequency;
+    });
+
+    const top7 = Object.entries(masterFreq)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 7)
+      .map(([digit]) => parseInt(digit))
+      .sort((a, b) => a - b);
+
+    setSelectedNumbers(top7);
+  };
 
   const isCrossingCut = useCallback((numStr: string) => {
-    const outerSet = [1, 4, 7, 0, 3, 9, 6];
-    const midSet = [2, 5, 8];
+    const groupA = [1, 4, 7, 0];
+    const groupB = [2, 5, 8];
+    const groupC = [3, 9, 6];
+    
     const d1 = parseInt(numStr[0]);
     const d2 = parseInt(numStr[1]);
     const d3 = parseInt(numStr[2]);
-    return midSet.includes(d2) && (outerSet.includes(d1) || outerSet.includes(d3));
+
+    const inA = (n: number) => groupA.includes(n);
+    const inB = (n: number) => groupB.includes(n);
+    const inC = (n: number) => groupC.includes(n);
+
+    // ตรรกะข้ามเศียร: ถ้าตัวกลางเป็นกลุ่ม B ห้ามมีฐาน A และ C อยู่คนละฝั่งหัวท้าย
+    if (inB(d2)) {
+      if (inA(d1) && inC(d3)) return true; // A-B-C (ตัด)
+      if (inC(d1) && inA(d3)) return true; // C-B-A (ตัด)
+    }
+    // กรณี A-B-A หรือ C-B-C (อนุญาต ไม่ตัด)
+    return false;
   }, []);
 
-  // วิน 2 ตัว: ไม่เอาเลขเบิ้ล (หาม 2 ตัว) ตามปกติของการวินเลข
   const win2Digits = useMemo(() => {
     if (selectedNumbers.length < 2) return [];
     let results: string[] = [];
@@ -143,9 +209,8 @@ const App: React.FC = () => {
       }
     }
     return isFiltering ? results.filter(isDayCombination) : results;
-  }, [selectedNumbers, isFiltering, isDayCombination, win2Mode]);
+  }, [selectedNumbers, isFiltering, win2Mode]);
 
-  // วิน 3 ตัวชุด: ใช้ i < j < k เพื่อให้ได้เลขที่ไม่ซ้ำกันเด็ดขาด (ไม่หาม/ไม่ตอง)
   const win3Sets = useMemo(() => {
     if (selectedNumbers.length < 3) return [];
     let results: string[] = [];
@@ -157,9 +222,8 @@ const App: React.FC = () => {
       }
     }
     return isFiltering ? results.filter(isDayCombination) : results;
-  }, [selectedNumbers, isFiltering, isDayCombination]);
+  }, [selectedNumbers, isFiltering]);
 
-  // วิน 3 ตัว 6 กลับ: ใช้เลข 3 ตัวที่ไม่ซ้ำกันมาสลับตำแหน่ง (ไม่หาม/ไม่ตอง)
   const win3Permutations = useMemo(() => {
     if (selectedNumbers.length < 3) return [];
     let results: string[] = [];
@@ -173,7 +237,13 @@ const App: React.FC = () => {
       }
     }
     return isFiltering ? results.filter(isDayCombination) : results;
-  }, [selectedNumbers, isFiltering, isDayCombination]);
+  }, [selectedNumbers, isFiltering]);
+
+  const isDayCombination = useCallback((digits: string) => {
+    if (currentDayIdx === null) return true;
+    const dayNums = DAY_NUMBERS.find(d => d.dayIdx === currentDayIdx)?.numbers || [];
+    return digits.split('').every(d => dayNums.includes(parseInt(d)));
+  }, [currentDayIdx]);
 
   const win3CrossingCut = useMemo(() => {
     return win3Permutations.filter(num => !isCrossingCut(num));
@@ -196,12 +266,6 @@ const App: React.FC = () => {
     return sum;
   }, [selectedBets, win2Digits.length, win3Sets.length, win3Permutations.length, win3CrossingCut.length, betAmount]);
 
-  const toggleBetSelection = (type: BetType) => {
-    setSelectedBets(prev => 
-      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
-    );
-  };
-
   const copyResults = (data: string[], type: string) => {
     navigator.clipboard.writeText(data.join(', '));
     setCopied(type);
@@ -209,17 +273,17 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pb-12 bg-slate-50 transition-colors duration-500">
+    <div className="min-h-screen pb-12 bg-slate-50 transition-colors duration-500 font-sans">
       <header className={`${activeTheme.bg} text-white py-6 px-4 shadow-lg sticky top-0 z-50 transition-colors duration-500`}>
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 flex-shrink-0">
             <Zap className={`w-8 h-8 ${currentDayIdx === 1 ? 'text-indigo-600' : 'text-yellow-300'} fill-current`} />
             <h1 className={`text-2xl font-bold tracking-tight ${currentDayIdx === 1 ? 'text-slate-800' : 'text-white'}`}>วินเลขนำโชค</h1>
           </div>
-          {activeDrawLabel && (
+          {lotteryDates.find(d => d.id === selectedDraw) && (
             <div className="text-right">
               <span className={`text-lg sm:text-2xl font-bold transition-colors duration-500 ${currentDayIdx === 1 ? 'text-slate-700' : 'text-white'}`}>
-                {activeDrawLabel}
+                งวดประจำวันที่ {lotteryDates.find(d => d.id === selectedDraw)?.label}
               </span>
             </div>
           )}
@@ -227,11 +291,12 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 mt-8 space-y-6">
+        {/* Draw Selector & Stats Action */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
            <section className="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-5">
               <div className="space-y-3">
                 <label className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                  <Calendar className={`w-5 h-5 ${activeTheme.text}`} /> กำหนดปี พ.ศ. เอง
+                  <Calendar className={`w-5 h-5 ${activeTheme.text}`} /> กำหนดปี พ.ศ.
                 </label>
                 <div className="flex items-center gap-3">
                   <button onClick={() => setCurrentYearBE(prev => prev - 1)} className="p-3 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors">
@@ -250,17 +315,25 @@ const App: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-500 uppercase tracking-wider">เลือกงวดในรอบปี {currentYearBE}</label>
+                <label className="text-sm font-bold text-slate-500 uppercase tracking-wider">เลือกงวดเพื่อดูสถิติย้อนหลัง</label>
                 <select value={selectedDraw} onChange={handleDrawChange} className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-4 px-4 rounded-xl appearance-none font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
                   <option value="" disabled>--- กรุณาเลือกงวด ---</option>
                   {lotteryDates.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
                 </select>
+                <button 
+                  disabled={!selectedDraw || isStatsLoading}
+                  onClick={fetchStatistics}
+                  className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${!selectedDraw ? 'bg-slate-100 text-slate-300' : 'bg-slate-900 text-amber-400 hover:bg-slate-800 border-2 border-amber-500/20'}`}
+                >
+                  {isStatsLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <BarChart3 className="w-5 h-5" />}
+                  วิเคราะห์สถิติย้อนหลัง 20 ปี
+                </button>
               </div>
            </section>
 
            <section className="lg:col-span-7 bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-4">
-               <Zap className={`w-5 h-5 ${activeTheme.text}`} /> ทางลัดเลขกำลังวัน
+               <Zap className={`w-5 h-5 ${activeTheme.text}`} /> ทางลัดเลขกำลังวัน (ตามงวด)
              </h2>
              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                {DAY_NUMBERS.map(day => (
@@ -273,29 +346,106 @@ const App: React.FC = () => {
            </section>
         </div>
 
+        {/* Stats Result View */}
+        {showStats && (
+          <section className="bg-slate-900 rounded-3xl p-8 shadow-2xl border border-amber-500/40 relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+              <TrendingUp className="w-48 h-48 text-amber-400" />
+            </div>
+            
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6 relative z-10">
+              <div>
+                <h2 className="text-3xl font-black text-amber-400 flex items-center gap-3">
+                  <Award className="w-8 h-8" /> สถิติเลขมงคล 20 ปี
+                </h2>
+                <p className="text-slate-400 text-sm mt-1">อ้างอิงงวด {lotteryDates.find(d => d.id === selectedDraw)?.label}</p>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={applyTop7FromStats}
+                  className="bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-900 px-8 py-4 rounded-2xl font-black transition-all shadow-xl active:scale-95 flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-6 h-6" /> ใช้วินเลข Top 7
+                </button>
+                <button onClick={() => setShowStats(false)} className="text-slate-400 hover:text-white px-4 py-3 font-bold transition-all">ปิดหน้าต่างสถิติ</button>
+              </div>
+            </div>
+
+            {isStatsLoading ? (
+              <div className="py-24 flex flex-col items-center justify-center space-y-6">
+                <div className="relative">
+                  <Loader2 className="w-16 h-16 text-amber-400 animate-spin" />
+                  <BarChart3 className="w-6 h-6 text-amber-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                </div>
+                <p className="text-amber-400 font-bold animate-pulse tracking-[0.2em] uppercase text-sm">กำลังคำนวณสถิติประวัติศาสตร์...</p>
+              </div>
+            ) : statsData && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {(['top2', 'bottom2', 'top3'] as const).map((key) => (
+                  <div key={key} className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+                    <h3 className="text-white font-bold mb-6 flex items-center justify-between border-b border-white/10 pb-3">
+                      <span className="text-amber-400">{key === 'top2' ? '2 ตัวบน' : key === 'bottom2' ? '2 ตัวล่าง' : '3 ตัวบน'}</span>
+                      <span className="text-[10px] text-slate-500 uppercase tracking-widest">ความถี่ที่พบ</span>
+                    </h3>
+                    <div className="space-y-4">
+                      {statsData[key].slice(0, 10).map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xl transition-all ${idx < 7 ? 'bg-amber-400 text-slate-900 shadow-lg shadow-amber-400/20' : 'bg-slate-800 text-slate-500'}`}>
+                            {item.digit}
+                          </div>
+                          <div className="flex-1 h-3 bg-slate-800 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-1000 ${idx < 7 ? 'bg-gradient-to-r from-amber-400 to-amber-300' : 'bg-slate-600 opacity-20'}`} 
+                              style={{ width: `${(item.frequency / Math.max(...statsData[key].map(i => i.frequency))) * 100}%` }}
+                            ></div>
+                          </div>
+                          <span className={`text-sm font-mono font-black ${idx < 7 ? 'text-amber-400' : 'text-slate-600'}`}>{item.frequency}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Number Selector */}
         <section className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
           <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
             <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-              <Hash className={`w-5 h-5 ${activeTheme.text}`} /> ชุดตัวเลขวิน ({selectedNumbers.length})
+              <Hash className={`w-5 h-5 ${activeTheme.text}`} /> เลือกเลขวิน (0-9)
             </h2>
-            <div className="flex gap-2">
-              <button onClick={() => setSelectedNumbers([0,1,2,3,4,5,6,7,8,9])} className={`text-xs font-bold ${activeTheme.text} px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors`}>เลือก 0-9</button>
-              <button onClick={() => { setSelectedNumbers([]); setCurrentDayIdx(null); setSelectedDraw(""); }} className="text-xs font-bold text-rose-500 px-3 py-2 rounded-lg hover:bg-rose-50 transition-colors">ล้างทั้งหมด</button>
+            <div className="flex gap-2 items-center">
+              <span className="text-sm font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full mr-2">
+                เลือกแล้ว {selectedNumbers.length} ตัว
+              </span>
+              <button onClick={() => setSelectedNumbers([0,1,2,3,4,5,6,7,8,9])} className={`text-xs font-bold ${activeTheme.text} px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors`}>เลือกทั้งหมด</button>
+              <button onClick={() => { setSelectedNumbers([]); setCurrentDayIdx(null); setSelectedDraw(""); }} className="text-xs font-bold text-rose-500 px-3 py-2 rounded-lg hover:bg-rose-100 transition-colors flex items-center gap-1">
+                <Trash2 className="w-3 h-3" /> ล้างเลข
+              </button>
             </div>
           </div>
           <NumberSelector selectedNumbers={selectedNumbers} onToggle={toggleNumber} themeColor={activeTheme.bg} />
         </section>
 
-        <section className={`bg-white rounded-2xl p-6 shadow-md border transition-all duration-500 ${activeTheme.border}`}>
-          <div className="flex flex-col gap-8">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-3 text-2xl font-black text-slate-800">
-                <Calculator className={`w-8 h-8 ${activeTheme.text}`} /> คำนวณเงิน
+        {/* Calculation Summary */}
+        <section className={`bg-white rounded-3xl p-8 shadow-md border-2 transition-all duration-500 ${activeTheme.border}`}>
+          <div className="flex flex-col gap-10">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex items-center gap-3 text-3xl font-black text-slate-800">
+                <Calculator className={`w-8 h-8 ${activeTheme.text}`} /> ตั้งราคาแทง
               </div>
-              <div className="relative w-full md:w-80">
-                <Coins className={`absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 ${activeTheme.text}`} />
-                <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} className={`w-full pl-12 pr-4 py-5 bg-slate-50 border-2 rounded-2xl font-black text-3xl text-slate-700 focus:outline-none transition-all ${activeTheme.border} text-right`} placeholder="0" />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">บาท</span>
+              <div className="relative w-full md:w-96">
+                <Coins className={`absolute left-5 top-1/2 -translate-y-1/2 w-8 h-8 ${activeTheme.text}`} />
+                <input 
+                  type="number" 
+                  value={betAmount} 
+                  onChange={(e) => setBetAmount(e.target.value)} 
+                  className={`w-full pl-16 pr-20 py-6 bg-slate-50 border-2 rounded-3xl font-black text-4xl text-slate-700 focus:outline-none transition-all ${activeTheme.border} text-right`} 
+                  placeholder="0" 
+                />
+                <span className="absolute right-6 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xl">บาท</span>
               </div>
             </div>
 
@@ -307,14 +457,18 @@ const App: React.FC = () => {
                 { id: 'back6' as BetType, label: '3 ตัว (6 กลับ)', count: win3Permutations.length },
                 { id: 'crossing3' as BetType, label: '3 ตัวข้ามเศียร', count: win3CrossingCut.length },
               ].map((bet) => (
-                <button key={bet.id} onClick={() => toggleBetSelection(bet.id)} className={`group relative flex flex-col rounded-3xl border-2 transition-all text-left overflow-hidden ${selectedBets.includes(bet.id) ? `border-transparent shadow-xl scale-[1.03] ${activeTheme.bg}` : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'}`}>
-                  <div className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest flex justify-between items-center ${selectedBets.includes(bet.id) ? 'bg-black/10 text-white' : 'bg-slate-50 text-slate-400'}`}>
+                <button 
+                  key={bet.id} 
+                  onClick={() => setSelectedBets(prev => prev.includes(bet.id) ? prev.filter(t => t !== bet.id) : [...prev, bet.id])} 
+                  className={`group relative flex flex-col rounded-3xl border-2 transition-all text-left overflow-hidden ${selectedBets.includes(bet.id) ? `border-transparent shadow-xl scale-[1.03] ${activeTheme.bg}` : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'}`}
+                >
+                  <div className={`px-5 py-3 text-[10px] font-black uppercase tracking-widest flex justify-between items-center ${selectedBets.includes(bet.id) ? 'bg-black/10 text-white' : 'bg-slate-50 text-slate-400'}`}>
                     {bet.label}
                     {selectedBets.includes(bet.id) && <Check className="w-4 h-4 text-white" />}
                   </div>
-                  <div className="p-6">
+                  <div className="p-7">
                     <div className="flex items-baseline gap-2">
-                      <span className={`text-3xl font-black ${selectedBets.includes(bet.id) ? 'text-white' : 'text-slate-800'}`}>{(bet.count * (parseFloat(betAmount) || 0)).toLocaleString()}</span>
+                      <span className={`text-4xl font-black ${selectedBets.includes(bet.id) ? 'text-white' : 'text-slate-800'}`}>{(bet.count * (parseFloat(betAmount) || 0)).toLocaleString()}</span>
                       <span className={`text-base font-bold ${selectedBets.includes(bet.id) ? 'text-white/80' : 'text-slate-400'}`}>บาท</span>
                     </div>
                     <div className={`mt-2 text-sm font-bold ${selectedBets.includes(bet.id) ? 'text-white/70' : 'text-slate-400'}`}>{bet.count} ชุด</div>
@@ -323,11 +477,11 @@ const App: React.FC = () => {
               ))}
 
               <div className={`relative flex flex-col rounded-3xl border-4 transition-all duration-500 overflow-hidden ${activeTheme.border} bg-slate-900 shadow-2xl scale-[1.05] z-10`}>
-                <div className={`${activeTheme.bg} px-4 py-3 text-xs font-black uppercase text-white tracking-widest text-center`}>ยอดรวมสุทธิ</div>
-                <div className="p-8 flex flex-col items-center justify-center bg-slate-900">
-                  <div className="flex items-baseline gap-3">
-                    <span className={`text-5xl font-black text-white tabular-nums`}>{totalCost.toLocaleString()}</span>
-                    <span className={`text-xl font-black text-white opacity-60`}>บาท</span>
+                <div className={`${activeTheme.bg} px-5 py-4 text-sm font-black uppercase text-white tracking-widest text-center`}>ยอดรวมสุทธิทั้งสิ้น</div>
+                <div className="p-10 flex flex-col items-center justify-center bg-slate-900">
+                  <div className="flex items-baseline gap-4">
+                    <span className={`text-6xl font-black text-white tabular-nums`}>{totalCost.toLocaleString()}</span>
+                    <span className={`text-2xl font-black text-white opacity-60`}>บาท</span>
                   </div>
                 </div>
               </div>
@@ -335,40 +489,50 @@ const App: React.FC = () => {
           </div>
         </section>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 pt-8 gap-4">
+        {/* Results Sections */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 pt-10 gap-4">
            <div className="flex items-center gap-2">
-             <Filter className={`w-6 h-6 ${activeTheme.text}`} />
-             <span className="text-xl font-bold text-slate-700">รายการวินเลข (ไม่รวมหาม)</span>
+             <Filter className={`w-7 h-7 ${activeTheme.text}`} />
+             <span className="text-2xl font-black text-slate-800">รายการเลขที่วินได้</span>
            </div>
-           
            <div className="flex flex-wrap gap-2">
-              <div className="flex bg-white p-1 rounded-full shadow-sm border border-slate-100">
-                <button onClick={() => setWin2Mode('straight')} className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold transition-all ${win2Mode === 'straight' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>ชุดตรง</button>
-                <button onClick={() => setWin2Mode('reverse')} className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold transition-all ${win2Mode === 'reverse' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>กลับเลข</button>
+              <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100">
+                <button onClick={() => setWin2Mode('straight')} className={`px-6 py-3 rounded-xl text-xs font-black transition-all ${win2Mode === 'straight' ? activeTheme.bg + ' text-white' : 'text-slate-400 hover:text-slate-600'}`}>ชุดตรง</button>
+                <button onClick={() => setWin2Mode('reverse')} className={`px-6 py-3 rounded-xl text-xs font-black transition-all ${win2Mode === 'reverse' ? activeTheme.bg + ' text-white' : 'text-slate-400 hover:text-slate-600'}`}>กลับเลข</button>
               </div>
               {currentDayIdx !== null && (
-                <button onClick={() => setIsFiltering(!isFiltering)} className={`flex items-center gap-2 px-5 py-2 rounded-full border transition-all duration-300 ${isFiltering ? activeTheme.bg + ' text-white shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
-                  {isFiltering ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                  <span className="text-xs font-bold">กรองกำลังวัน</span>
+                <button onClick={() => setIsFiltering(!isFiltering)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl border-2 transition-all ${isFiltering ? activeTheme.bg + ' text-white border-transparent shadow-lg' : 'bg-white text-slate-500 border-slate-200'}`}>
+                  {isFiltering ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                  <span className="text-xs font-black">กรองเฉพาะเลขเด่นงวดนี้</span>
                 </button>
               )}
            </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <ResultCard title="วินเลข 2 ตัวบน" subtitle={isFiltering ? "กรองตามกำลังวัน" : "เลขวินตรง/กลับ"} data={win2Digits} onCopy={() => copyResults(win2Digits, 'top2')} isCopied={copied === 'top2'} theme={activeTheme} />
-          <ResultCard title="วินเลข 2 ตัวล่าง" subtitle={isFiltering ? "กรองตามกำลังวัน" : "เลขวินตรง/กลับ"} data={win2Digits} onCopy={() => copyResults(win2Digits, 'bottom2')} isCopied={copied === 'bottom2'} theme={activeTheme} />
-          <div className="space-y-4">
-             <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
-                <button onClick={() => setWin3Mode('sets')} className={`flex-1 min-w-[90px] flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[10px] font-bold transition-all ${win3Mode === 'sets' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>3 ตัวชุด</button>
-                <button onClick={() => setWin3Mode('6back')} className={`flex-1 min-w-[90px] flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[10px] font-bold transition-all ${win3Mode === '6back' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>6 กลับ</button>
-                <button onClick={() => setWin3Mode('crossing')} className={`flex-1 min-w-[90px] flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[10px] font-bold transition-all ${win3Mode === 'crossing' ? activeTheme.bg + ' text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>ตัดข้ามเศียร</button>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          <ResultCard title="วินเลข 2 ตัวบน" subtitle="ตัดเลขเบิ้ล/ตองอัตโนมัติ" data={win2Digits} onCopy={() => copyResults(win2Digits, 'top2')} isCopied={copied === 'top2'} theme={activeTheme} />
+          <ResultCard title="วินเลข 2 ตัวล่าง" subtitle="ตัดเลขเบิ้ล/ตองอัตโนมัติ" data={win2Digits} onCopy={() => copyResults(win2Digits, 'bottom2')} isCopied={copied === 'bottom2'} theme={activeTheme} />
+          <div className="space-y-6">
+             <div className="flex bg-white p-2 rounded-3xl shadow-sm border border-slate-100 overflow-x-auto">
+                <button onClick={() => setWin3Mode('sets')} className={`flex-1 min-w-[100px] py-4 rounded-2xl text-[10px] font-black uppercase transition-all ${win3Mode === 'sets' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>3 ตัวตรง</button>
+                <button onClick={() => setWin3Mode('6back')} className={`flex-1 min-w-[100px] py-4 rounded-2xl text-[10px] font-black uppercase transition-all ${win3Mode === '6back' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>3 ตัว 6 กลับ</button>
+                <button onClick={() => setWin3Mode('crossing')} className={`flex-1 min-w-[100px] py-4 rounded-2xl text-[10px] font-black uppercase transition-all ${win3Mode === 'crossing' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>ตัดข้ามเศียร</button>
              </div>
-             <ResultCard title={win3Mode === 'sets' ? "วินเลข 3 ตัวตรง" : win3Mode === 'crossing' ? "วินเลข 3 ตัว (ตัดข้ามเศียร)" : "วินเลข 3 ตัว (6 กลับ)"} subtitle="ระบบตัดเลขหามและเลขตองให้อัตโนมัติ" data={win3DisplayData} onCopy={() => copyResults(win3DisplayData, '3digit')} isCopied={copied === '3digit'} theme={activeTheme} isFullHeight={true} />
+             <ResultCard 
+                title={win3Mode === 'sets' ? "วินเลข 3 ตัวตรง" : win3Mode === 'crossing' ? "วินเลข 3 ตัว (ตัดข้ามเศียร)" : "วินเลข 3 ตัว (6 กลับ)"} 
+                subtitle={win3Mode === 'crossing' ? "ตัดตามกฎ A-B-C / C-B-A (ตามรูป)" : "ตัดเลขเบิ้ล/หาม/ตองอัตโนมัติ"} 
+                data={win3DisplayData} 
+                onCopy={() => copyResults(win3DisplayData, '3digit')} 
+                isCopied={copied === '3digit'} 
+                theme={activeTheme} 
+                isFullHeight={true} 
+              />
           </div>
         </div>
       </main>
-      <footer className="max-w-6xl mx-auto px-4 mt-16 mb-8 text-center text-slate-400 text-xs uppercase tracking-widest">© วินเลขนำโชค - ปรับปรุงเพื่อความแม่นยำ</footer>
+      <footer className="max-w-6xl mx-auto px-4 mt-20 mb-10 text-center">
+        <p className="text-slate-400 text-[10px] uppercase tracking-[0.3em] font-black">© ระบบวินเลขนำโชค - สถิติอัจฉริยะ 20 ปี และระบบตัดข้ามเศียรความละเอียดสูง</p>
+      </footer>
     </div>
   );
 };
