@@ -79,11 +79,18 @@ const App: React.FC = () => {
     for (let month = 0; month < 12; month++) {
       [1, 16].forEach(day => {
         let actualDay = day;
-        if (month === 0 && day === 16) actualDay = 17;
-        if (month === 4 && day === 1) actualDay = 2;
+        // ปรับแก้ตามวันหยุดนักขัตฤกษ์ที่หวยเลื่อนออก
+        if (month === 0 && day === 1) actualDay = 2; // 1 ม.ค. เลื่อนเป็น 2 ม.ค. (วันปีใหม่)
+        if (month === 0 && day === 16) actualDay = 17; // 16 ม.ค. เลื่อนเป็น 17 ม.ค. (วันครู)
+        if (month === 4 && day === 1) actualDay = 2; // 1 พ.ค. เลื่อนเป็น 2 พ.ค. (วันแรงงาน)
+        
         const date = new Date(adYear, month, actualDay);
         const dayOfWeek = date.getDay();
-        dates.push({ label: `${actualDay} ${THAI_MONTHS[month]} ${currentYearBE} (${THAI_DAYS_LONG[dayOfWeek]})`, dayOfWeek: dayOfWeek, id: `${adYear}-${month + 1}-${actualDay}` });
+        dates.push({ 
+          label: `${actualDay} ${THAI_MONTHS[month]} ${currentYearBE} (${THAI_DAYS_LONG[dayOfWeek]})`, 
+          dayOfWeek: dayOfWeek, 
+          id: `${adYear}-${month + 1}-${actualDay}` 
+        });
       });
     }
     return dates;
