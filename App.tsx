@@ -89,6 +89,29 @@ const App: React.FC = () => {
     return dates;
   }, [currentYearBE]);
 
+  // ฟังก์ชันส่วนกลางสำหรับลงตัวเลขตามวัน
+  const applyLuckyNumbers = useCallback((dayIdx: number) => {
+    setCurrentDayIdx(dayIdx);
+    const luckyData = DAY_NUMBERS.find(d => d.dayIdx === dayIdx);
+    if (luckyData) {
+      const sortedNumbers = [...luckyData.numbers].sort((a, b) => a - b);
+      if (selectionMode === 'single') {
+        setSelectedNumbers(sortedNumbers);
+      } else {
+        setOption1Numbers(sortedNumbers);
+      }
+    }
+  }, [selectionMode]);
+
+  const handleDrawChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSelectedDraw(val);
+    const draw = lotteryDates.find(d => d.id === val);
+    if (draw) {
+      applyLuckyNumbers(draw.dayOfWeek);
+    }
+  };
+
   const calculateLocalStats = (seed: string) => {
     const hash = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const generateResults = (offset: number) => {
@@ -120,20 +143,6 @@ const App: React.FC = () => {
     const setter = pool === 'single' ? setSelectedNumbers : pool === 'opt1' ? setOption1Numbers : setOption2Numbers;
     setter(prev => prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num].sort((a, b) => a - b));
   }, []);
-
-  const handleDrawChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    setSelectedDraw(val);
-    const draw = lotteryDates.find(d => d.id === val);
-    if (draw) {
-      setCurrentDayIdx(draw.dayOfWeek);
-      const luckyData = DAY_NUMBERS.find(d => d.dayIdx === draw.dayOfWeek);
-      if (luckyData) {
-        if (selectionMode === 'single') setSelectedNumbers([...luckyData.numbers].sort((a, b) => a - b));
-        else setOption1Numbers([...luckyData.numbers].sort((a, b) => a - b));
-      }
-    }
-  };
 
   const isCrossingCut = useCallback((numStr: string) => {
     const groupA = [1, 4, 7, 0], groupB = [2, 5, 8], groupC = [3, 9, 6];
@@ -265,7 +274,7 @@ const App: React.FC = () => {
              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800"><Zap className={`w-5 h-5 ${activeTheme.text}`} /> ทางลัดเลขกำลังวัน (ลง Opt 1)</h2>
              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                {DAY_NUMBERS.map(day => (
-                 <button key={day.label} onClick={() => { setCurrentDayIdx(day.dayIdx); handleDrawChange({ target: { value: selectedDraw || '' } } as any); }} className={`${DAY_THEMES[day.dayIdx].bg} ${day.dayIdx === 1 ? 'text-slate-800' : 'text-white'} px-4 py-3 rounded-xl text-sm font-bold shadow-sm hover:brightness-95 transition-all`}>
+                 <button key={day.label} onClick={() => applyLuckyNumbers(day.dayIdx)} className={`${DAY_THEMES[day.dayIdx].bg} ${day.dayIdx === 1 ? 'text-slate-800' : 'text-white'} px-4 py-3 rounded-xl text-sm font-bold shadow-sm hover:brightness-95 transition-all active:scale-95`}>
                    <span className="opacity-80 text-[10px] block">วัน{day.label}</span> {day.numbers.join('-')}
                  </button>
                ))}
