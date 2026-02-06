@@ -19,7 +19,8 @@ import {
   TrendingUp,
   Award,
   Trash2,
-  Sparkles
+  Sparkles,
+  ArrowRightLeft
 } from 'lucide-react';
 import NumberSelector from './components/NumberSelector';
 import ResultCard from './components/ResultCard';
@@ -48,7 +49,7 @@ const DAY_NUMBERS = [
 const THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 const THAI_DAYS_LONG = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
 
-type BetType = 'top2' | 'bottom2' | 'sets3' | 'back6' | 'crossing3';
+type BetType = 'top2' | 'bottom2' | 'sets3' | 'back6' | 'crossingCut3' | 'crossingOnly3';
 
 interface StatResult {
   digit: number;
@@ -63,7 +64,7 @@ const App: React.FC = () => {
   const [currentDayIdx, setCurrentDayIdx] = useState<number | null>(null);
   const [isFiltering, setIsFiltering] = useState<boolean>(false);
   const [betAmount, setBetAmount] = useState<string>("1");
-  const [win3Mode, setWin3Mode] = useState<'sets' | '6back' | 'crossing'>('6back');
+  const [win3Mode, setWin3Mode] = useState<'sets' | '6back' | 'crossing' | 'onlyCrossing'>('6back');
   const [win2Mode, setWin2Mode] = useState<'reverse' | 'straight'>('reverse');
   const [selectedBets, setSelectedBets] = useState<BetType[]>(['top2', 'bottom2', 'back6']);
   
@@ -227,15 +228,20 @@ const App: React.FC = () => {
     return digits.split('').every(d => dayNums.includes(parseInt(d)));
   }, [currentDayIdx]);
 
-  const win3CrossingCut = useMemo(() => {
+  const win3CrossingCutData = useMemo(() => {
     return win3Permutations.filter(num => !isCrossingCut(num));
+  }, [win3Permutations, isCrossingCut]);
+
+  const win3CrossingOnlyData = useMemo(() => {
+    return win3Permutations.filter(num => isCrossingCut(num));
   }, [win3Permutations, isCrossingCut]);
 
   const win3DisplayData = useMemo(() => {
     if (win3Mode === 'sets') return win3Sets;
-    if (win3Mode === 'crossing') return win3CrossingCut;
+    if (win3Mode === 'crossing') return win3CrossingCutData;
+    if (win3Mode === 'onlyCrossing') return win3CrossingOnlyData;
     return win3Permutations;
-  }, [win3Mode, win3Sets, win3Permutations, win3CrossingCut]);
+  }, [win3Mode, win3Sets, win3Permutations, win3CrossingCutData, win3CrossingOnlyData]);
 
   const totalCost = useMemo(() => {
     const amount = parseFloat(betAmount) || 0;
@@ -244,9 +250,10 @@ const App: React.FC = () => {
     if (selectedBets.includes('bottom2')) sum += win2Digits.length * amount;
     if (selectedBets.includes('sets3')) sum += win3Sets.length * amount;
     if (selectedBets.includes('back6')) sum += win3Permutations.length * amount;
-    if (selectedBets.includes('crossing3')) sum += win3CrossingCut.length * amount;
+    if (selectedBets.includes('crossingCut3')) sum += win3CrossingCutData.length * amount;
+    if (selectedBets.includes('crossingOnly3')) sum += win3CrossingOnlyData.length * amount;
     return sum;
-  }, [selectedBets, win2Digits.length, win3Sets.length, win3Permutations.length, win3CrossingCut.length, betAmount]);
+  }, [selectedBets, win2Digits.length, win3Sets.length, win3Permutations.length, win3CrossingCutData.length, win3CrossingOnlyData.length, betAmount]);
 
   const copyResults = (data: string[], type: string) => {
     navigator.clipboard.writeText(data.join(', '));
@@ -433,7 +440,8 @@ const App: React.FC = () => {
                 { id: 'bottom2' as BetType, label: '2 ตัวล่าง', count: win2Digits.length },
                 { id: 'sets3' as BetType, label: '3 ตัวชุด (ไม่หาม)', count: win3Sets.length },
                 { id: 'back6' as BetType, label: '3 ตัว (6 กลับ)', count: win3Permutations.length },
-                { id: 'crossing3' as BetType, label: '3 ตัวข้ามเศียร', count: win3CrossingCut.length },
+                { id: 'crossingCut3' as BetType, label: '3 ตัว (ตัดข้ามเศียร)', count: win3CrossingCutData.length },
+                { id: 'crossingOnly3' as BetType, label: '3 ตัว (ข้ามเศียรล้วน)', count: win3CrossingOnlyData.length },
               ].map((bet) => (
                 <button 
                   key={bet.id} 
@@ -490,14 +498,24 @@ const App: React.FC = () => {
           <ResultCard title="วินเลข 2 ตัวบน" subtitle="ตัดเลขเบิ้ล/ตองอัตโนมัติ" data={win2Digits} onCopy={() => copyResults(win2Digits, 'top2')} isCopied={copied === 'top2'} theme={activeTheme} />
           <ResultCard title="วินเลข 2 ตัวล่าง" subtitle="ตัดเลขเบิ้ล/ตองอัตโนมัติ" data={win2Digits} onCopy={() => copyResults(win2Digits, 'bottom2')} isCopied={copied === 'bottom2'} theme={activeTheme} />
           <div className="space-y-6">
-             <div className="flex bg-white p-2 rounded-3xl shadow-sm border border-slate-100 overflow-x-auto">
-                <button onClick={() => setWin3Mode('sets')} className={`flex-1 min-w-[100px] py-4 rounded-2xl text-[10px] font-black uppercase transition-all ${win3Mode === 'sets' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>3 ตัวตรง</button>
-                <button onClick={() => setWin3Mode('6back')} className={`flex-1 min-w-[100px] py-4 rounded-2xl text-[10px] font-black uppercase transition-all ${win3Mode === '6back' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>3 ตัว 6 กลับ</button>
-                <button onClick={() => setWin3Mode('crossing')} className={`flex-1 min-w-[100px] py-4 rounded-2xl text-[10px] font-black uppercase transition-all ${win3Mode === 'crossing' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>ตัดข้ามเศียร</button>
+             <div className="flex bg-white p-2 rounded-3xl shadow-sm border border-slate-100 overflow-x-auto no-scrollbar">
+                <button onClick={() => setWin3Mode('sets')} className={`flex-1 min-w-[80px] py-4 px-2 rounded-2xl text-[9px] font-black uppercase transition-all ${win3Mode === 'sets' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>3 ตัวตรง</button>
+                <button onClick={() => setWin3Mode('6back')} className={`flex-1 min-w-[80px] py-4 px-2 rounded-2xl text-[9px] font-black uppercase transition-all ${win3Mode === '6back' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>3 ตัว 6 กลับ</button>
+                <button onClick={() => setWin3Mode('crossing')} className={`flex-1 min-w-[80px] py-4 px-2 rounded-2xl text-[9px] font-black uppercase transition-all ${win3Mode === 'crossing' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>ตัดข้ามเศียร</button>
+                <button onClick={() => setWin3Mode('onlyCrossing')} className={`flex-1 min-w-[80px] py-4 px-2 rounded-2xl text-[9px] font-black uppercase transition-all ${win3Mode === 'onlyCrossing' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>ข้ามเศียรล้วน</button>
              </div>
              <ResultCard 
-                title={win3Mode === 'sets' ? "วินเลข 3 ตัวตรง" : win3Mode === 'crossing' ? "วินเลข 3 ตัว (ตัดข้ามเศียร)" : "วินเลข 3 ตัว (6 กลับ)"} 
-                subtitle={win3Mode === 'crossing' ? "ตัดตามกฎ A-B-C / C-B-A (ตามรูป)" : "ตัดเลขเบิ้ล/หาม/ตองอัตโนมัติ"} 
+                title={
+                  win3Mode === 'sets' ? "วินเลข 3 ตัวตรง" : 
+                  win3Mode === 'crossing' ? "วินเลข 3 ตัว (ตัดข้ามเศียร)" : 
+                  win3Mode === 'onlyCrossing' ? "วินเลข 3 ตัว (ข้ามเศียรล้วน)" :
+                  "วินเลข 3 ตัว (6 กลับ)"
+                } 
+                subtitle={
+                  win3Mode === 'crossing' ? "ตัดตามกฎ A-B-C / C-B-A ออกไป" : 
+                  win3Mode === 'onlyCrossing' ? "แสดงเฉพาะรูปแบบข้ามเศียร A-B-C / C-B-A" :
+                  "ตัดเลขเบิ้ล/หาม/ตองอัตโนมัติ"
+                } 
                 data={win3DisplayData} 
                 onCopy={() => copyResults(win3DisplayData, '3digit')} 
                 isCopied={copied === '3digit'} 
