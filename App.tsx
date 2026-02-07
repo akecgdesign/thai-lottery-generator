@@ -157,7 +157,6 @@ const App: React.FC = () => {
   }, []);
 
   const checkHighlightStatus = useCallback((numStr: string) => {
-    // นำเงื่อนไข if (selectionMode === 'single') return 'none' ออกเพื่อให้สีไฮไลท์แสดงผลแม้ในโหมดวินกลุ่มเดียว
     const digits = numStr.split('').map(Number);
     const countMatch = (pool: number[]) => digits.every(d => pool.includes(d));
     
@@ -296,7 +295,7 @@ const App: React.FC = () => {
            <section className="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border space-y-5">
               <div className="space-y-3">
                 <label className="text-lg font-semibold flex items-center gap-2 text-slate-800"><Calendar className={`w-5 h-5 ${activeTheme.text}`} /> ปี พ.ศ.</label>
-                <div className="flex items-center bg-slate-50 border rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 w-full">
+                <div className="flex items-center bg-slate-50 border rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 w-full shadow-sm">
                   <button onClick={() => setCurrentYearBE(prev => prev - 1)} className="p-4 sm:px-6 hover:bg-slate-200 border-r text-slate-500 transition-colors shrink-0 outline-none"><ChevronLeft className="w-5 h-5" /></button>
                   <input 
                     type="number" 
@@ -308,7 +307,7 @@ const App: React.FC = () => {
                 </div>
               </div>
               <div className="space-y-3">
-                <select value={selectedDraw} onChange={handleDrawChange} className="w-full bg-slate-50 border py-4 px-4 rounded-xl font-medium text-lg focus:ring-2 focus:ring-indigo-500 outline-none mb-3">
+                <select value={selectedDraw} onChange={handleDrawChange} className="w-full bg-slate-50 border py-4 px-4 rounded-xl font-medium text-lg focus:ring-2 focus:ring-indigo-500 outline-none mb-3 shadow-sm">
                   <option value="" disabled>--- กรุณาเลือกงวด ---</option>
                   {lotteryDates.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
                 </select>
