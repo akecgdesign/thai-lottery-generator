@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   Hash, 
   Zap,
@@ -8,11 +8,8 @@ import {
   Calculator,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
   ArrowRightLeft,
   Shuffle,
-  Moon,
-  Sun,
   X,
   TrendingUp,
   BarChart3,
@@ -72,7 +69,7 @@ const getMoonPhaseInfo = (date: Date) => {
 const App: React.FC = () => {
   const [currentYearBE, setCurrentYearBE] = useState<number>(new Date().getFullYear() + 543);
   const [selectedDraw, setSelectedDraw] = useState<string>("");
-  const [selectionMode, setSelectionMode] = useState<SelectionMode>('cross');
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('single');
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [option1Numbers, setOption1Numbers] = useState<number[]>([]);
   const [option2Numbers, setOption2Numbers] = useState<number[]>([]);
@@ -124,14 +121,27 @@ const App: React.FC = () => {
     setSelectedDraw(val);
     const draw = lotteryDates.find(d => d.id === val);
     if (draw) {
-      setSelectionMode('cross');
       setCurrentDayIdx(draw.dayOfWeek);
-      setOption1Numbers([...DAY_NUMBERS.find(d => d.dayIdx === draw.dayOfWeek)?.numbers || []].sort((a, b) => a - b));
-      const moonNums = draw.moonType === 'ขึ้น' ? WAXING_NUMBERS[draw.dayOfWeek] : WANING_NUMBERS[draw.dayOfWeek];
-      setOption2Numbers([...moonNums || []].sort((a, b) => a - b));
+      const dayNums = [...DAY_NUMBERS.find(d => d.dayIdx === draw.dayOfWeek)?.numbers || []].sort((a, b) => a - b);
+      const moonNums = [...(draw.moonType === 'ขึ้น' ? WAXING_NUMBERS[draw.dayOfWeek] : WANING_NUMBERS[draw.dayOfWeek]) || []].sort((a, b) => a - b);
       const top7 = calculateTop7(val, draw.dayOfWeek);
-      setOption3Numbers([...top7]);
+
+      if (selectionMode === 'single') {
+        setSelectedNumbers([...dayNums]);
+      } else {
+        setOption1Numbers([...dayNums]);
+        setOption2Numbers([...moonNums]);
+        setOption3Numbers([...top7]);
+      }
     }
+  };
+
+  const applyShortcut = (numbers: number[], targetPool: 'single' | 'opt1' | 'opt2' | 'opt3') => {
+    const sorted = [...numbers].sort((a, b) => a - b);
+    if (targetPool === 'single') setSelectedNumbers(sorted);
+    else if (targetPool === 'opt1') setOption1Numbers(sorted);
+    else if (targetPool === 'opt2') setOption2Numbers(sorted);
+    else if (targetPool === 'opt3') setOption3Numbers(sorted);
   };
 
   const toggleNumber = useCallback((num: number, pool: 'single' | 'opt1' | 'opt2' | 'opt3') => {
@@ -150,7 +160,7 @@ const App: React.FC = () => {
   const checkHighlightStatus = useCallback((numStr: string) => {
     if (selectionMode === 'single') return 'none';
     const digits = numStr.split('').map(Number);
-    const countMatch = (pool: number[]) => digits.every(d => pool.includes(d));
+    const countMatch = (pool: number[]) => digits.length > 0 && digits.every(d => pool.includes(d));
     const in1 = countMatch(option1Numbers);
     const in2 = countMatch(option2Numbers);
     const in3 = countMatch(option3Numbers);
@@ -233,13 +243,13 @@ const App: React.FC = () => {
               </div>
               <p className="text-slate-400 font-medium">อ้างอิงสถิติวัน{currentDrawInfo?.label.match(/\((.*?)\)/)?.[1].split(' ')[0]} ในรอบ 2 ทศวรรษ</p>
             </div>
-            <div className="p-8 space-y-8">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="p-8 space-y-8 text-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-left">
                 <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-100 flex flex-col items-center text-center">
                   <TrendingUp className="w-10 h-10 text-indigo-500 mb-3" />
-                  <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">เลข Top 7 งวดนี้ (Auto-Apply)</span>
+                  <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">เลข Top 7 งวดนี้</span>
                   <div className="flex flex-wrap justify-center gap-1.5 mt-3">
-                    {option3Numbers.map(n => (
+                    {calculateTop7(selectedDraw, currentDayIdx || 0).map(n => (
                       <span key={n} className="w-9 h-9 flex items-center justify-center bg-white border border-indigo-200 text-indigo-600 rounded-lg text-lg font-black shadow-sm">{n}</span>
                     ))}
                   </div>
@@ -250,7 +260,18 @@ const App: React.FC = () => {
                   <div className="mt-2 text-5xl font-black text-emerald-600">94.8%</div>
                 </div>
               </div>
-              <button onClick={() => setShowStats(false)} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xl hover:bg-indigo-700 transition-colors shadow-lg active:scale-95">รับทราบ (ระบบนำเลขใส่ Opt 3 ให้แล้ว)</button>
+              <button 
+                onClick={() => {
+                  const top7 = calculateTop7(selectedDraw, currentDayIdx || 0);
+                  if (selectionMode === 'single') applyShortcut(top7, 'single');
+                  else applyShortcut(top7, 'opt3');
+                  setShowStats(false);
+                }} 
+                disabled={!selectedDraw}
+                className={`w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xl hover:bg-indigo-700 transition-colors shadow-lg active:scale-95 ${!selectedDraw ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {!selectedDraw ? 'กรุณาเลือกงวดก่อน' : 'นำเลขใส่ช่องวินทันที'}
+              </button>
             </div>
           </div>
         </div>
@@ -283,29 +304,10 @@ const App: React.FC = () => {
            <section className="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border space-y-5">
               <div className="space-y-3">
                 <label className="text-lg font-semibold flex items-center gap-2 text-slate-800"><Calendar className={`w-5 h-5 ${activeTheme.text}`} /> ปี พ.ศ.</label>
-                
-                {/* Robust Unified Year Selector Box */}
                 <div className="flex flex-nowrap items-center bg-slate-50 border rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                  <button 
-                    onClick={() => setCurrentYearBE(prev => prev - 1)} 
-                    className="flex-shrink-0 p-4 bg-white border-r hover:bg-slate-100 transition-colors active:scale-95"
-                    aria-label="ลดปี"
-                  >
-                    <ChevronLeft className="w-5 h-5 text-slate-600" />
-                  </button>
-                  <input 
-                    type="number" 
-                    value={currentYearBE} 
-                    onChange={(e) => setCurrentYearBE(parseInt(e.target.value) || 2568)} 
-                    className="flex-1 text-center font-bold text-2xl py-3 bg-transparent outline-none w-full min-w-0"
-                  />
-                  <button 
-                    onClick={() => setCurrentYearBE(prev => prev + 1)} 
-                    className="flex-shrink-0 p-4 bg-white border-l hover:bg-slate-100 transition-colors active:scale-95"
-                    aria-label="เพิ่มปี"
-                  >
-                    <ChevronRight className="w-5 h-5 text-slate-600" />
-                  </button>
+                  <button onClick={() => setCurrentYearBE(prev => prev - 1)} className="shrink-0 p-4 bg-white border-r hover:bg-slate-100 transition-colors active:scale-95"><ChevronLeft className="w-5 h-5 text-slate-600" /></button>
+                  <input type="number" value={currentYearBE} onChange={(e) => setCurrentYearBE(parseInt(e.target.value) || 2568)} className="flex-1 text-center font-bold text-2xl py-3 bg-transparent outline-none w-full min-w-0" />
+                  <button onClick={() => setCurrentYearBE(prev => prev + 1)} className="shrink-0 p-4 bg-white border-l hover:bg-slate-100 transition-colors active:scale-95"><ChevronRight className="w-5 h-5 text-slate-600" /></button>
                 </div>
               </div>
               <div className="space-y-3">
@@ -319,14 +321,14 @@ const App: React.FC = () => {
               </div>
            </section>
            <section className="lg:col-span-7 bg-white rounded-2xl p-6 shadow-sm border">
-             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800"><Zap className={`w-5 h-5 ${activeTheme.text}`} /> ทางลัดเลขกำลังวัน (ลง Opt 1)</h2>
+             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800"><Zap className={`w-5 h-5 ${activeTheme.text}`} /> ทางลัดเลขกำลังวัน (ลง {selectionMode === 'single' ? 'วินกลุ่มเดียว' : 'Opt 1'})</h2>
              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                {DAY_NUMBERS.map(day => {
                  const isMatchingDay = currentDrawInfo?.dayOfWeek === day.dayIdx;
                  return (
                    <button key={day.label} onClick={() => { 
-                     setSelectionMode('cross'); 
-                     setOption1Numbers([...day.numbers].sort((a,b)=>a-b)); 
+                     if (selectionMode === 'single') applyShortcut(day.numbers, 'single');
+                     else applyShortcut(day.numbers, 'opt1');
                      setCurrentDayIdx(day.dayIdx);
                    }} className={`${isMatchingDay ? 'bg-amber-400 border-amber-600 text-amber-950 ring-4 ring-amber-200' : `${DAY_THEMES[day.dayIdx].bg} ${day.dayIdx === 1 ? 'text-slate-800' : 'text-white'}`} px-4 py-3 rounded-xl text-sm font-bold shadow-sm hover:brightness-95 transition-all active:scale-95 border-2 border-transparent`}>
                      <span className={`opacity-80 text-[10px] block ${isMatchingDay ? 'text-amber-900 font-black' : ''}`}>วัน{day.label} {isMatchingDay ? '(งวดนี้)' : ''}</span> 
@@ -341,7 +343,7 @@ const App: React.FC = () => {
         <section className="bg-white rounded-3xl p-8 shadow-sm border space-y-6">
           {selectionMode === 'single' ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between"><h2 className="text-xl font-bold flex items-center gap-2 text-slate-800"><Hash className={`w-6 h-6 ${activeTheme.text}`} /> เลือกเลขวิน (0-9)</h2><button onClick={() => setSelectedNumbers([])} className="text-sm font-bold text-rose-500 px-4 py-1 bg-rose-50 rounded-full border border-rose-100">ล้างเลข</button></div>
+              <div className="flex items-center justify-between"><h2 className="text-xl font-bold flex items-center gap-2 text-slate-800"><Hash className={`w-6 h-6 ${activeTheme.text}`} /> วินกลุ่มเดียว (กำหนดเลขเอง)</h2><button onClick={() => setSelectedNumbers([])} className="text-sm font-bold text-rose-500 px-4 py-1 bg-rose-50 rounded-full border border-rose-100">ล้างเลข</button></div>
               <NumberSelector selectedNumbers={selectedNumbers} onToggle={(n) => toggleNumber(n, 'single')} themeColor={activeTheme.bg} />
             </div>
           ) : (
