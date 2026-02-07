@@ -19,7 +19,7 @@ import {
   History
 } from 'lucide-react';
 import NumberSelector from './components/NumberSelector';
-import ResultCard from './components/ResultCard';
+import ResultCard, { HighlightStatus } from './components/ResultCard';
 
 const DAY_THEMES: Record<number | string, { bg: string; text: string; hex: string; border: string; btn: string; tag: string; switch: string }> = {
   0: { bg: 'bg-red-600', text: 'text-red-600', hex: '#dc2626', border: 'border-red-100', btn: 'bg-red-600 hover:bg-red-700', tag: 'bg-red-100 text-red-700', switch: 'bg-red-500' },
@@ -156,17 +156,18 @@ const App: React.FC = () => {
     return (inB(d2) && ((inA(d1) && inC(d3)) || (inC(d1) && inA(d3))));
   }, []);
 
-  const checkHighlightStatus = useCallback((numStr: string) => {
+  const checkHighlightStatus = useCallback((numStr: string): HighlightStatus => {
     const digits = numStr.split('').map(Number);
-    const countMatch = (pool: number[]) => digits.every(d => pool.includes(d));
+    const countMatch = (pool: number[]) => pool.length > 0 && digits.every(d => pool.includes(d));
     
     const in1 = countMatch(option1Numbers);
     const in2 = countMatch(option2Numbers);
     const in3 = countMatch(option3Numbers);
 
-    if (in1 && in2 && in3) return 'diamond'; 
-    if (in1 && in2) return 'gold';
-    if ((in1 && in3) || (in2 && in3)) return 'silver';
+    if (in1 && in2 && in3) return 'diamond'; // ซ้ำ 3 กลุ่ม
+    if (in1 && in2) return 'gold'; // ซ้ำกลุ่ม 1 และ 2
+    if ((in1 && in3) || (in2 && in3)) return 'silver'; // ซ้ำคู่อื่นๆ
+    if (in1) return 'opt1'; // เฉพาะกลุ่ม 1
     
     return 'none';
   }, [option1Numbers, option2Numbers, option3Numbers]);
