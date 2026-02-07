@@ -4,11 +4,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>วินเลขนำโชค Pro - ระบบวินเลข 2 ตัว และ 3 ตัว</title>
+    <title>วินเลขนำโชค - ระบบวินเลข 2 ตัว และ 3 ตัว</title>
     <meta name="description" content="แอปพลิเคชันสำหรับวินเลข 2 ตัว และ 3 ตัว พร้อมระบบคำนวณเงินและตัดเลขข้ามเศียร">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Kanit', 'sans-serif'],
+            },
+          }
+        },
+        // เพิ่ม safelist เพื่อป้องกันสีหายเมื่อรันบน GitHub
+        safelist: [
+          'bg-indigo-600', 'bg-orange-400', 'bg-slate-300', 'bg-white',
+          'border-indigo-800', 'border-orange-600', 'border-slate-400', 'border-slate-200',
+          'text-white', 'text-slate-900', 'text-slate-800',
+          'ring-indigo-200', 'ring-2', 'z-10', 'scale-110', 'scale-105',
+          'bg-red-600', 'bg-yellow-400', 'bg-pink-500', 'bg-green-600', 'bg-orange-500', 'bg-sky-400', 'bg-purple-600',
+          'text-red-600', 'text-yellow-600', 'text-pink-600', 'text-green-600', 'text-orange-600', 'text-sky-600', 'text-purple-600',
+          'border-red-100', 'border-yellow-100', 'border-pink-100', 'border-green-100', 'border-orange-100', 'border-sky-100', 'border-purple-100'
+        ]
+      }
+    </script>
 <script type="importmap">
 {
   "imports": {
@@ -22,8 +44,8 @@
 }
 </script>
 </head>
-<body class="font-sans">
+<body>
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+    <script type="module" src="/index.tsx"></script>
 </body>
 </html>
