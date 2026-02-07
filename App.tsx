@@ -131,14 +131,14 @@ const App: React.FC = () => {
       setOption1Numbers(dayNums);
       setOption2Numbers(moonNums);
       setOption3Numbers(top7);
-      setSelectedNumbers(dayNums); // เริ่มต้นด้วยเลขกำลังวัน
+      setSelectedNumbers(dayNums); 
     }
   };
 
   const handleAnalyzeStats = () => {
     if (selectedDraw && currentDayIdx !== null) {
       const top7 = calculateTop7(selectedDraw, currentDayIdx);
-      setSelectedNumbers(top7); // เปลี่ยนเลขในช่องวินกลุ่มเดียวเป็น Top 7 ทันที
+      setSelectedNumbers(top7); 
       setShowStats(true);
     }
   };
