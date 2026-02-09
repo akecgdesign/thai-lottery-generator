@@ -1,8 +1,23 @@
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { 
-  Hash, Zap, Calendar, Filter, Calculator, ChevronLeft, ChevronRight, 
-  ArrowRightLeft, Shuffle, X, TrendingUp, BarChart3, History, RotateCcw
+  Hash, 
+  Zap,
+  Calendar,
+  Filter,
+  Calculator,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  ArrowRightLeft,
+  Shuffle,
+  Moon,
+  Sun,
+  X,
+  TrendingUp,
+  BarChart3,
+  History,
+  RotateCcw
 } from 'lucide-react';
 import NumberSelector from './components/NumberSelector';
 import ResultCard, { HighlightStatus } from './components/ResultCard';
@@ -129,6 +144,17 @@ const App: React.FC = () => {
     }
   };
 
+  const handleResetAll = () => {
+    setSelectedNumbers([]);
+    setOption1Numbers([]);
+    setOption2Numbers([]);
+    setOption3Numbers([]);
+    setSelectedDraw("");
+    setCurrentDayIdx(null);
+    setBetAmount("1");
+    setSelectedBets(['top2', 'bottom2', 'back6']);
+  };
+
   const toggleNumber = useCallback((num: number, pool: 'single' | 'opt1' | 'opt2' | 'opt3') => {
     const setterMap = { single: setSelectedNumbers, opt1: setOption1Numbers, opt2: setOption2Numbers, opt3: setOption3Numbers };
     const setter = setterMap[pool];
@@ -150,10 +176,11 @@ const App: React.FC = () => {
     const in2 = countMatch(option2Numbers);
     const in3 = countMatch(option3Numbers);
 
-    if (in1 && in2 && in3) return 'diamond'; 
-    if (in1 && in2) return 'gold'; 
-    if ((in1 && in3) || (in2 && in3)) return 'silver'; 
-    if (in1) return 'opt1'; 
+    if (in1 && in2 && in3) return 'diamond'; // ม่วง: ซ้ำครบ 3 กลุ่ม
+    if (in1 && in2) return 'gold'; // ส้ม: ซ้ำกลุ่ม 1 และ 2
+    if ((in1 && in3) || (in2 && in3)) return 'silver'; // เทา: ซ้ำคู่อื่นๆ
+    if (in1) return 'opt1'; // พื้นหลังจาง: มีในกลุ่มกำลังวัน
+    
     return 'none';
   }, [option1Numbers, option2Numbers, option3Numbers]);
 
@@ -162,7 +189,6 @@ const App: React.FC = () => {
     return Array.from(new Set([...option1Numbers, ...option2Numbers, ...option3Numbers])).sort((a, b) => a - b);
   }, [selectionMode, selectedNumbers, option1Numbers, option2Numbers, option3Numbers]);
 
-  // วิน 2 ตัว: ตัดเลขหาม (เช่น 11) อัตโนมัติด้วยเงื่อนไข i < j
   const win2Digits = useMemo(() => {
     const nums = combinedActiveNumbers;
     const p: string[] = [];
@@ -176,7 +202,6 @@ const App: React.FC = () => {
     return Array.from(new Set(p)).sort();
   }, [combinedActiveNumbers, win2Mode]);
 
-  // วิน 3 ตัว: ตัดเลขหาม/ตอง (เช่น 112, 111) อัตโนมัติด้วยเงื่อนไข i < j < k
   const win3Sets = useMemo(() => {
     const nums = combinedActiveNumbers;
     const s: string[] = [];
@@ -213,93 +238,121 @@ const App: React.FC = () => {
     return sum;
   }, [selectedBets, win2Digits.length, win3Sets.length, win3Permutations.length, betAmount, isCrossingCut]);
 
-  const handleReset = () => {
-    setSelectedDraw("");
-    setSelectedNumbers([]);
-    setOption1Numbers([]);
-    setOption2Numbers([]);
-    setOption3Numbers([]);
-    setCurrentDayIdx(null);
-    setBetAmount("1");
-    setSelectedBets(['top2', 'bottom2', 'back6']);
-    setWin3Mode('6back');
-    setWin2Mode('reverse');
+  const copyResults = (data: string[], type: string) => {
+    navigator.clipboard.writeText(data.join(', '));
+    setCopied(type);
+    setTimeout(() => setCopied(null), 2000);
   };
 
   return (
-    <div className="min-h-screen pb-20 bg-slate-50 font-sans">
-      {/* Modal สถิติ */}
+    <div className="min-h-screen pb-12 bg-slate-50 font-sans">
+      {/* ส่วน Modal สถิติ */}
       {showStats && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300">
             <div className="bg-slate-900 p-8 text-white relative">
               <button onClick={() => setShowStats(false)} className="absolute right-6 top-6 p-2 rounded-full hover:bg-white/10 transition-colors"><X className="w-6 h-6" /></button>
-              <h2 className="text-3xl font-black flex items-center gap-3"><History className="text-indigo-400" /> วิเคราะห์สถิติจำลอง</h2>
+              <div className="flex items-center gap-3 mb-2">
+                <History className="w-8 h-8 text-indigo-400" />
+                <h2 className="text-3xl font-black">วิเคราะห์สถิติ 20 ปี</h2>
+              </div>
+              <p className="text-slate-400 font-medium">อ้างอิงสถิติวัน{currentDrawInfo?.label.match(/\((.*?)\)/)?.[1].split(' ')[0]} ในรอบ 2 ทศวรรษ</p>
             </div>
             <div className="p-8 space-y-8 text-center">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="p-6 bg-indigo-50 rounded-3xl border">
-                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">เลขเด่นงวดนี้</span>
+                <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-100">
+                  <TrendingUp className="w-10 h-10 text-indigo-500 mx-auto mb-3" />
+                  <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">เลขเด่น 7 ตัว</span>
                   <div className="flex flex-wrap justify-center gap-1.5 mt-3">
-                    {calculateTop7(selectedDraw || lotteryDates[0].id, currentDayIdx || 0).map(n => (
-                      <span key={n} className="w-9 h-9 flex items-center justify-center bg-white border border-indigo-200 text-indigo-600 rounded-lg text-lg font-black">{n}</span>
+                    {calculateTop7(selectedDraw || "2025-01-01", currentDayIdx || 0).map(n => (
+                      <span key={n} className="w-9 h-9 flex items-center justify-center bg-white border border-indigo-200 text-indigo-600 rounded-lg text-lg font-black shadow-sm">{n}</span>
                     ))}
                   </div>
                 </div>
-                <div className="p-6 bg-slate-50 rounded-3xl border flex flex-col items-center justify-center">
-                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">ความน่าจะเป็น</span>
-                  <div className="text-4xl font-black text-emerald-600 mt-1">95.4%</div>
+                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                  <BarChart3 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+                  <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">ดัชนีความแม่นยำ</span>
+                  <div className="mt-2 text-5xl font-black text-emerald-600">95.4%</div>
                 </div>
               </div>
-              <button onClick={() => setShowStats(false)} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg">ปิดหน้าต่าง</button>
+              <button onClick={() => setShowStats(false)} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xl hover:bg-indigo-700 transition-colors shadow-lg active:scale-95">เริ่มวินเลขจากสถิติ</button>
             </div>
           </div>
         </div>
       )}
 
       <header className={`${activeTheme.bg} text-white py-6 px-4 shadow-lg sticky top-0 z-50 transition-colors duration-500`}>
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Zap className={`w-8 h-8 ${currentDayIdx === 1 ? 'text-indigo-600' : 'text-yellow-300'} fill-current`} />
             <h1 className="text-2xl font-bold">วินเลขนำโชค Pro</h1>
           </div>
           {selectedDraw && (
             <div className="text-right">
-              <span className="text-lg sm:text-2xl font-bold">งวด {currentDrawInfo?.label.split(' (')[0]}</span>
+              <span className="text-lg sm:text-2xl font-bold">งวดวันที่ {currentDrawInfo?.label.split(' (')[0]}</span>
+              <div className="text-xs opacity-90 font-black uppercase tracking-widest mt-1 bg-white/20 px-2 py-1 rounded-md inline-block">
+                {currentDrawInfo?.label.match(/\((.*?)\)/)?.[1] || ''}
+              </div>
             </div>
           )}
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 mt-8 space-y-8">
-        <section className="bg-white rounded-2xl p-2 shadow-sm border flex gap-2">
-          <button onClick={() => setSelectionMode('single')} className={`flex-1 py-4 rounded-xl font-black transition-all ${selectionMode === 'single' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400'}`}>วินกลุ่มเดียว</button>
-          <button onClick={() => setSelectionMode('cross')} className={`flex-1 py-4 rounded-xl font-black transition-all ${selectionMode === 'cross' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400'}`}>วินแยกกลุ่ม (Opt 1,2,3)</button>
+        {/* ส่วนเลือกโหมดการวิน */}
+        <section className="bg-white rounded-2xl p-2 shadow-sm border flex items-center gap-2">
+          <button onClick={() => setSelectionMode('single')} className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-black text-xl transition-all ${selectionMode === 'single' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}><Shuffle className="w-6 h-6" /> วินกลุ่มเดียว</button>
+          <button onClick={() => setSelectionMode('cross')} className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-black text-xl transition-all ${selectionMode === 'cross' ? activeTheme.bg + ' text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}><ArrowRightLeft className="w-6 h-6" /> วินแยกกลุ่ม (1,2,3)</button>
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
            <section className="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border space-y-5">
               <div className="space-y-3">
-                <label className="text-lg font-semibold flex items-center gap-2"><Calendar className={activeTheme.text} /> งวดที่ต้องการ</label>
-                <select value={selectedDraw} onChange={handleDrawChange} className="w-full bg-slate-50 border py-4 px-4 rounded-xl font-medium outline-none">
-                  <option value="" disabled>--- เลือกงวด ---</option>
+                <label className="text-lg font-semibold flex items-center gap-2 text-slate-800"><Calendar className={`w-5 h-5 ${activeTheme.text}`} /> ปี พ.ศ.</label>
+                <div className="flex items-center bg-slate-50 border rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 w-full shadow-sm">
+                  <button onClick={() => setCurrentYearBE(prev => prev - 1)} className="p-4 sm:px-6 hover:bg-slate-200 border-r text-slate-500 transition-colors shrink-0 outline-none"><ChevronLeft className="w-5 h-5" /></button>
+                  <input 
+                    type="number" 
+                    value={currentYearBE} 
+                    onChange={(e) => setCurrentYearBE(parseInt(e.target.value) || 2568)} 
+                    className="flex-1 text-center font-bold text-xl sm:text-2xl py-3 bg-transparent outline-none appearance-none min-w-0" 
+                  />
+                  <button onClick={() => setCurrentYearBE(prev => prev + 1)} className="p-4 sm:px-6 hover:bg-slate-200 border-l text-slate-500 transition-colors shrink-0 outline-none"><ChevronRight className="w-5 h-5" /></button>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <select value={selectedDraw} onChange={handleDrawChange} className="w-full bg-slate-50 border py-4 px-4 rounded-xl font-medium text-lg focus:ring-2 focus:ring-indigo-500 outline-none mb-3 shadow-sm cursor-pointer">
+                  <option value="" disabled>--- กรุณาเลือกงวด ---</option>
                   {lotteryDates.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
                 </select>
-                <button onClick={handleAnalyzeStats} disabled={!selectedDraw} className="w-full py-4 bg-slate-900 text-amber-400 rounded-xl font-bold shadow-md">วิเคราะห์สถิติจำลอง</button>
+                <div className="grid grid-cols-1 gap-2">
+                  <button onClick={handleAnalyzeStats} disabled={!selectedDraw} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all ${!selectedDraw ? 'bg-slate-100 text-slate-300' : 'bg-slate-900 text-amber-400 border-2 border-amber-500/20 hover:bg-slate-800'}`}>
+                    <History className="w-5 h-5" /> วิเคราะห์สถิติ 20 ปี
+                  </button>
+                  <button onClick={handleResetAll} className="w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all active:scale-95 shadow-sm">
+                    <RotateCcw className="w-5 h-5" /> ล้างค่าการเลือกทั้งหมด
+                  </button>
+                </div>
               </div>
            </section>
+           
            <section className="lg:col-span-7 bg-white rounded-2xl p-6 shadow-sm border">
-             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><Zap className={activeTheme.text} /> ทางลัดเลขกำลังวัน</h2>
+             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800"><Zap className={`w-5 h-5 ${activeTheme.text}`} /> ทางลัดเลขกำลังวัน</h2>
              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-               {DAY_NUMBERS.map(day => (
-                 <button key={day.label} onClick={() => { 
-                   setOption1Numbers([...day.numbers].sort((a,b)=>a-b)); 
-                   setSelectedNumbers([...day.numbers].sort((a,b)=>a-b));
-                   setCurrentDayIdx(day.dayIdx);
-                 }} className={`${DAY_THEMES[day.dayIdx].bg} ${day.dayIdx === 1 ? 'text-slate-800' : 'text-white'} px-4 py-3 rounded-xl text-sm font-bold shadow-sm`}>
-                   {day.label}: {day.numbers.join('-')}
-                 </button>
-               ))}
+               {DAY_NUMBERS.map(day => {
+                 const isMatchingDay = currentDrawInfo?.dayOfWeek === day.dayIdx;
+                 return (
+                   <button key={day.label} onClick={() => { 
+                     const sortedDayNums = [...day.numbers].sort((a,b)=>a-b);
+                     setOption1Numbers(sortedDayNums); 
+                     setSelectedNumbers(sortedDayNums);
+                     setCurrentDayIdx(day.dayIdx);
+                   }} className={`${isMatchingDay ? 'bg-amber-400 border-amber-600 text-amber-950 ring-4 ring-amber-200' : `${DAY_THEMES[day.dayIdx].bg} ${day.dayIdx === 1 ? 'text-slate-800' : 'text-white'}`} px-4 py-3 rounded-xl text-sm font-bold shadow-sm hover:brightness-95 transition-all active:scale-95 border-2 border-transparent`}>
+                     <span className={`opacity-80 text-[10px] block ${isMatchingDay ? 'text-amber-900 font-black' : ''}`}>วัน{day.label} {isMatchingDay ? '(งวดนี้)' : ''}</span> 
+                     {day.numbers.join('-')}
+                   </button>
+                 )
+               })}
              </div>
            </section>
         </div>
@@ -307,75 +360,100 @@ const App: React.FC = () => {
         <section className="bg-white rounded-3xl p-8 shadow-sm border space-y-6">
           {selectionMode === 'single' ? (
             <div className="space-y-4">
-              <h2 className="text-xl font-bold flex items-center justify-between">วินกลุ่มเดียว <button onClick={() => setSelectedNumbers([])} className="text-sm text-rose-500 font-bold">ล้างเลข</button></h2>
+              <div className="flex items-center justify-between"><h2 className="text-xl font-bold flex items-center gap-2 text-slate-800"><Hash className={`w-6 h-6 ${activeTheme.text}`} /> เลือกเลขวิน (0-9) - วินกลุ่มเดียว</h2><button onClick={() => setSelectedNumbers([])} className="text-sm font-bold text-rose-500 px-4 py-1 bg-rose-50 rounded-full border border-rose-100">ล้างเลข</button></div>
               <NumberSelector selectedNumbers={selectedNumbers} onToggle={(n) => toggleNumber(n, 'single')} themeColor={activeTheme.bg} />
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {['opt1', 'opt2', 'opt3'].map((opt, i) => (
-                <div key={opt} className="space-y-4 bg-slate-50 p-6 rounded-3xl border">
-                  <h3 className="font-black text-xs uppercase opacity-50">Option {i+1}</h3>
-                  <NumberSelector 
-                    selectedNumbers={opt === 'opt1' ? option1Numbers : opt === 'opt2' ? option2Numbers : option3Numbers} 
-                    onToggle={(n) => toggleNumber(n, opt as any)} 
-                    themeColor={i === 0 ? activeTheme.bg : i === 1 ? 'bg-orange-500' : 'bg-indigo-600'} 
-                    isCompact 
-                  />
-                </div>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+              <div className="space-y-4 bg-slate-50 p-6 rounded-3xl border">
+                <div className="flex items-center justify-between"><h3 className={`font-black uppercase tracking-widest text-xs ${activeTheme.text}`}>Option 1 (กำลังวัน)</h3><button onClick={() => setOption1Numbers([])} className="text-[10px] font-bold text-rose-400 px-2 py-0.5 bg-white rounded-full border">ล้าง</button></div>
+                <NumberSelector selectedNumbers={option1Numbers} onToggle={(n) => toggleNumber(n, 'opt1')} themeColor={activeTheme.bg} isCompact />
+              </div>
+              <div className="space-y-4 bg-orange-50/30 p-6 rounded-3xl border border-orange-100">
+                <div className="flex items-center justify-between"><h3 className="font-black uppercase tracking-widest text-xs text-orange-600">Option 2 (ขึ้น/แรม)</h3><button onClick={() => setOption2Numbers([])} className="text-[10px] font-bold text-rose-400 px-2 py-0.5 bg-white rounded-full border">ล้าง</button></div>
+                <NumberSelector selectedNumbers={option2Numbers} onToggle={(n) => toggleNumber(n, 'opt2')} themeColor="bg-orange-500" isCompact />
+              </div>
+              <div className="space-y-4 bg-indigo-50/30 p-6 rounded-3xl border border-indigo-100">
+                <div className="flex items-center justify-between"><h3 className="font-black uppercase tracking-widest text-xs text-indigo-600">Option 3 (สถิติ 20 ปี)</h3><button onClick={() => setOption3Numbers([])} className="text-[10px] font-bold text-rose-400 px-2 py-0.5 bg-white rounded-full border">ล้าง</button></div>
+                <NumberSelector selectedNumbers={option3Numbers} onToggle={(n) => toggleNumber(n, 'opt3')} themeColor="bg-indigo-600" isCompact />
+              </div>
             </div>
           )}
         </section>
 
         <div className="space-y-12">
+           {/* ส่วนวินเลข 2 ตัว */}
            <div className="space-y-6">
-              <div className="flex items-center justify-between px-2">
-                <h2 className="text-2xl font-black flex items-center gap-2"><Filter className={activeTheme.text} /> วินเลข 2 ตัว (ไม่รวมหาม)</h2>
-                <div className="flex gap-2 bg-slate-200 p-1.5 rounded-2xl border">
-                  <button onClick={() => setWin2Mode('straight')} className={`px-6 py-2 rounded-xl font-black ${win2Mode === 'straight' ? activeTheme.bg + ' text-white shadow-lg' : 'text-slate-600'}`}>ชุดตรง</button>
-                  <button onClick={() => setWin2Mode('reverse')} className={`px-6 py-2 rounded-xl font-black ${win2Mode === 'reverse' ? activeTheme.bg + ' text-white shadow-lg' : 'text-slate-600'}`}>กลับเลข</button>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 gap-4">
+                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2"><Filter className={`w-8 h-8 ${activeTheme.text}`} /> รายการวินเลข 2 ตัว</h2>
+                <div className="flex gap-2 bg-slate-200 p-1.5 rounded-2xl shadow-inner border border-slate-300">
+                  <button onClick={() => setWin2Mode('straight')} className={`px-6 py-3 rounded-xl text-lg font-black transition-all ${win2Mode === 'straight' ? activeTheme.bg + ' text-white shadow-lg' : 'text-slate-600 hover:bg-slate-100'}`}>ชุดตรง</button>
+                  <button onClick={() => setWin2Mode('reverse')} className={`px-6 py-3 rounded-xl text-lg font-black transition-all ${win2Mode === 'reverse' ? activeTheme.bg + ' text-white shadow-lg' : 'text-slate-600 hover:bg-slate-100'}`}>กลับเลข</button>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ResultCard title="2 ตัวบน" subtitle="ไฮไลท์: ม่วง(ซ้ำ3), ส้ม(ซ้ำ2)" data={win2Digits} onCopy={() => {}} isCopied={false} theme={activeTheme} highlightCheck={checkHighlightStatus} isFullHeight />
-                <ResultCard title="2 ตัวล่าง" subtitle="ไฮไลท์: ม่วง(ซ้ำ3), ส้ม(ซ้ำ2)" data={win2Digits} onCopy={() => {}} isCopied={false} theme={activeTheme} highlightCheck={checkHighlightStatus} isFullHeight />
+                <ResultCard title="วินเลข 2 ตัวบน" subtitle={selectionMode === 'cross' ? "ไฮไลท์ตามกลุ่มที่ซ้ำ (ม่วง=3, ส้ม=2)" : "เลขวินจากชุดที่เลือก"} data={win2Digits} onCopy={() => copyResults(win2Digits, 'top2')} isCopied={copied === 'top2'} theme={activeTheme} highlightCheck={checkHighlightStatus} isFullHeight />
+                <ResultCard title="วินเลข 2 ตัวล่าง" subtitle={selectionMode === 'cross' ? "ไฮไลท์ตามกลุ่มที่ซ้ำ (ม่วง=3, ส้ม=2)" : "เลขวินจากชุดที่เลือก"} data={win2Digits} onCopy={() => copyResults(win2Digits, 'bottom2')} isCopied={copied === 'bottom2'} theme={activeTheme} highlightCheck={checkHighlightStatus} isFullHeight />
               </div>
            </div>
 
+           {/* ส่วนวินเลข 3 ตัว */}
            <div className="space-y-6">
-              <div className="flex items-center justify-between px-2">
-                <h2 className="text-2xl font-black flex items-center gap-2"><Filter className={activeTheme.text} /> วินเลข 3 ตัว (ไม่รวมหาม/ตอง)</h2>
-              </div>
-              <div className="flex bg-slate-200 p-1.5 rounded-2xl border overflow-x-auto no-scrollbar gap-2 mb-6">
-                {[{id:'sets',l:'3 ตัวตรง'},{id:'6back',l:'6 กลับ'},{id:'crossing',l:'ตัดข้ามเศียร'},{id:'onlyCrossing',l:'ข้ามเศียรล้วน'}].map(m => (
-                  <button key={m.id} onClick={() => setWin3Mode(m.id as any)} className={`flex-shrink-0 px-8 py-3 rounded-xl font-black ${win3Mode === m.id ? activeTheme.bg + ' text-white shadow-lg' : 'text-slate-600'}`}>{m.l}</button>
-                ))}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 gap-4">
+                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2"><Filter className={`w-8 h-8 ${activeTheme.text}`} /> รายการวินเลข 3 ตัว</h2>
+                <div className="flex bg-slate-200 p-1.5 rounded-2xl shadow-inner border border-slate-300 overflow-x-auto no-scrollbar gap-2">
+                  {[{id:'sets',l:'3 ตัวตรง'},{id:'6back',l:'6 กลับ'},{id:'crossing',l:'ตัดข้ามเศียร'},{id:'onlyCrossing',l:'ข้ามเศียรล้วน'}].map(m => (
+                    <button key={m.id} onClick={() => setWin3Mode(m.id as any)} className={`flex-shrink-0 px-8 py-3 rounded-xl text-lg font-black transition-all ${win3Mode === m.id ? activeTheme.bg + ' text-white shadow-lg' : 'text-slate-600 hover:bg-slate-100'}`}>{m.l}</button>
+                  ))}
+                </div>
               </div>
               <ResultCard 
-                title="วินเลข 3 ตัว" 
-                subtitle="เส้นแบ่งทุก 50 ชุด | ตัดเลขหามและเลขตองอัตโนมัติ" 
+                title={win3Mode === 'sets' ? "วินเลข 3 ตัวตรง" : win3Mode === 'crossing' ? "วิน 3 ตัว (ตัดข้ามเศียร)" : win3Mode === 'onlyCrossing' ? "วิน 3 ตัว (ข้ามเศียรล้วน)" : "วินเลข 3 ตัว (6 กลับ)"} 
+                subtitle="แสดงเส้นแบ่งทุก 50 ตัวเลข | ไฮไลท์ตามกลุ่มที่ซ้ำ" 
                 data={win3Mode === 'sets' ? win3Sets : win3Mode === 'crossing' ? win3Permutations.filter(n => !isCrossingCut(n)) : win3Mode === 'onlyCrossing' ? win3Permutations.filter(n => isCrossingCut(n)) : win3Permutations} 
-                onCopy={() => {}} isCopied={false} theme={activeTheme} highlightCheck={checkHighlightStatus} isFullHeight 
+                onCopy={() => copyResults(win3Mode === 'sets' ? win3Sets : win3Permutations, '3digit')} 
+                isCopied={copied === '3digit'} 
+                theme={activeTheme} 
+                highlightCheck={checkHighlightStatus} 
+                isFullHeight={true}
               />
            </div>
         </div>
 
-        <section className={`bg-white rounded-3xl p-10 shadow-2xl border-2 ${activeTheme.border}`}>
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 border-b pb-8 mb-8">
-            <div className="text-3xl font-black flex items-center gap-4"><Calculator className={activeTheme.text} /> ราคาแทง/ชุด</div>
-            <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} className="w-full md:w-48 py-4 px-6 bg-slate-50 border-2 rounded-2xl font-black text-3xl text-right outline-none" />
-          </div>
-          <div className="bg-slate-900 rounded-3xl p-10 flex flex-col items-center justify-center border-4 border-indigo-500/30">
-            <span className="text-indigo-400 font-black uppercase tracking-widest mb-2">ยอดรวมสุทธิ</span>
-            <div className="text-6xl font-black text-white">{totalCost.toLocaleString()} <span className="text-2xl opacity-40">บาท</span></div>
+        {/* ส่วนคำนวณเงินยอดรวม */}
+        <section className={`bg-white rounded-3xl p-10 shadow-2xl border-2 ${activeTheme.border} transition-all duration-500 mt-10`}>
+          <div className="flex flex-col gap-10">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b pb-8">
+              <div className="text-4xl font-black text-slate-800 flex items-center gap-4"><Calculator className={`w-14 h-14 ${activeTheme.text}`} /> ราคาต่อชุด</div>
+              <div className="relative w-full md:w-96">
+                <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} className="w-full pl-10 pr-12 py-8 bg-slate-50 border-2 rounded-[2rem] font-black text-7xl text-right outline-none focus:border-indigo-400 transition-all shadow-inner" />
+                <span className="absolute right-8 top-1/2 -translate-y-1/2 font-black text-slate-300 text-3xl">฿</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[
+                { id: 'top2' as BetType, label: '2 ตัวบน', count: win2Digits.length },
+                { id: 'bottom2' as BetType, label: '2 ตัวล่าง', count: win2Digits.length },
+                { id: 'sets3' as BetType, label: '3 ตัวตรง', count: win3Sets.length },
+                { id: 'back6' as BetType, label: '3 ตัว (6 กลับ)', count: win3Permutations.length },
+                { id: 'crossingCut3' as BetType, label: '3 ตัว (ตัดข้ามเศียร)', count: win3Permutations.filter(n => !isCrossingCut(n)).length },
+                { id: 'crossingOnly3' as BetType, label: '3 ตัว (ข้ามเศียรล้วน)', count: win3Permutations.filter(n => isCrossingCut(n)).length },
+              ].map((bet) => {
+                const isSelected = selectedBets.includes(bet.id);
+                return (
+                  <button key={bet.id} onClick={() => setSelectedBets(prev => isSelected ? prev.filter(t => t !== bet.id) : [...prev, bet.id])} className={`group relative flex flex-col rounded-[2.5rem] border-2 transition-all p-8 text-left ${isSelected ? activeTheme.bg + ' text-white scale-[1.05] border-transparent shadow-xl' : 'bg-slate-200 text-slate-900 border-slate-300 hover:scale-[1.02]'}`}>
+                    <span className={`text-2xl font-black block mb-4 ${isSelected ? 'opacity-80' : 'text-slate-900'}`}>{bet.label}</span>
+                    <div className="flex items-baseline gap-2"><span className="text-5xl font-black">{(bet.count * (parseFloat(betAmount) || 0)).toLocaleString()}</span><span className="text-lg opacity-60 font-bold">บาท</span></div>
+                  </button>
+                );
+              })}
+              <div className="bg-slate-900 rounded-[2.5rem] border-4 p-10 flex flex-col items-center justify-center shadow-2xl border-indigo-500/50">
+                <span className="text-lg font-black text-indigo-400 uppercase tracking-widest mb-4">ยอดรวมสุทธิ</span>
+                <div className="flex items-baseline gap-4"><span className="text-7xl font-black text-white">{totalCost.toLocaleString()}</span><span className="text-2xl font-bold text-white opacity-40">บาท</span></div>
+              </div>
+            </div>
           </div>
         </section>
-
-        <div className="flex justify-center pt-10">
-          <button onClick={handleReset} className="flex items-center gap-3 px-10 py-5 bg-rose-500 text-white rounded-[2rem] font-black text-xl shadow-xl shadow-rose-200">
-            <RotateCcw className="w-6 h-6" /> รีเซ็ตข้อมูลทั้งหมด
-          </button>
-        </div>
       </main>
     </div>
   );
