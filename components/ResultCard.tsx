@@ -35,17 +35,17 @@ const ResultCard: React.FC<ResultCardProps> = ({
   highlightCheck 
 }) => {
   
-  // ใช้ Inline Styles เพื่อให้สีแสดงผลแน่นอนบน Production/GitHub
+  // กำหนดค่าสีแบบคงที่ (Inline Styles) เพื่อป้องกัน Tailwind Purge บน GitHub
   const getStatusStyle = (status: HighlightStatus): React.CSSProperties => {
     switch (status) {
-      case 'diamond': // ซ้ำครบ 3 กลุ่ม
-        return { backgroundColor: '#4f46e5', borderColor: '#3730a3', color: '#ffffff', fontWeight: '900' };
-      case 'gold': // ซ้ำกลุ่ม 1 และ 2
-        return { backgroundColor: '#fb923c', borderColor: '#ea580c', color: '#ffffff', fontWeight: '900' };
-      case 'silver': // ซ้ำคู่อื่นๆ
-        return { backgroundColor: '#64748b', borderColor: '#334155', color: '#ffffff' };
-      case 'opt1': // มีในกลุ่มกำลังวัน
-        return { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1', color: '#334155' };
+      case 'diamond': // ซ้ำครบ 3 กลุ่ม -> ม่วงเข้ม
+        return { backgroundColor: '#4f46e5', borderColor: '#3730a3', color: '#ffffff' };
+      case 'gold': // ซ้ำกลุ่ม 1 และ 2 -> ส้ม
+        return { backgroundColor: '#fb923c', borderColor: '#ea580c', color: '#ffffff' };
+      case 'silver': // ซ้ำคู่อื่นๆ -> เทาเข้ม
+        return { backgroundColor: '#94a3b8', borderColor: '#475569', color: '#ffffff' };
+      case 'opt1': // อยู่ในกลุ่มกำลังวันอย่างเดียว -> เทาอ่อน
+        return { backgroundColor: '#f1f5f9', borderColor: '#e2e8f0', color: '#0f172a' };
       default:
         return { backgroundColor: '#ffffff', borderColor: '#e2e8f0', color: '#1e293b' };
     }
@@ -75,30 +75,28 @@ const ResultCard: React.FC<ResultCardProps> = ({
             {data.map((num, idx) => {
               const status = highlightCheck ? highlightCheck(num) : 'none';
               const customStyle = getStatusStyle(status);
-              const isSpecial = status === 'diamond' || status === 'gold';
               
-              // เส้นแบ่งทุก 50 ตัว
               const showSeparator = idx !== 0 && idx % 50 === 0;
 
               return (
                 <React.Fragment key={idx}>
                   {showSeparator && (
                     <div className="col-span-full flex items-center py-6 group">
-                      <div className="grow h-px bg-slate-200"></div>
+                      <div className="grow h-px bg-slate-200 group-hover:bg-slate-300 transition-colors"></div>
                       <div className="px-5">
                         <span className="text-[10px] font-black text-slate-400 tracking-[0.3em] uppercase bg-white border border-slate-100 px-3 py-1 rounded-full shadow-sm">
-                          ชุดที่ {idx + 1}
+                          รายการที่ {idx + 1}
                         </span>
                       </div>
-                      <div className="grow h-px bg-slate-200"></div>
+                      <div className="grow h-px bg-slate-200 group-hover:bg-slate-300 transition-colors"></div>
                     </div>
                   )}
                   <span 
                     style={customStyle}
                     className={`
-                      inline-flex items-center justify-center h-11 border-2 rounded-xl transition-all text-base
-                      ${isSpecial ? 'scale-105 z-10 shadow-md' : 'shadow-sm'}
+                      inline-flex items-center justify-center h-11 border-2 rounded-xl font-black shadow-sm transition-all text-base
                       hover:brightness-95 active:scale-90 cursor-default
+                      ${(status === 'diamond' || status === 'gold') ? 'scale-105 z-10' : ''}
                     `}
                   >
                     {num}
@@ -110,7 +108,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
         ) : (
           <div className="h-48 flex flex-col items-center justify-center text-slate-300 space-y-3">
             <div className="w-16 h-16 rounded-full border-4 border-dashed border-slate-200 animate-pulse"></div>
-            <p className="text-sm font-bold tracking-widest uppercase">เลือกตัวเลขเพื่อเริ่มวิน</p>
+            <p className="text-sm font-bold tracking-widest uppercase">ไม่มีข้อมูลตัวเลข</p>
           </div>
         )}
       </div>
@@ -121,7 +119,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
           onClick={onCopy}
           className={`
             w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-lg transition-all duration-300
-            ${data.length === 0 ? 'bg-slate-100 text-slate-300 cursor-not-allowed border-2 border-slate-100' : `${theme.btn} text-white shadow-lg active:scale-95`}
+            ${data.length === 0 ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : `${theme.btn} text-white shadow-lg active:scale-95`}
           `}
         >
           {isCopied ? (
